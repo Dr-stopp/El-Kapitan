@@ -166,3 +166,10 @@ Icon[
 Network Trash Folder
 Temporary Items
 .apdisk
+
+##Intellij
+backend/target/
+backend/.idea/
+
+#Secrets
+backend/src/main/resources/application.properties
