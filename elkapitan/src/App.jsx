@@ -14,23 +14,11 @@ import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import StudentDashboard from './components/Student/StudentDashboard';
 import './App.css';
+import { supabase } from './supabaseClient';
 
 function App() {
 
-  // ── Auth state ─────────────────────────────────────────────────────────────
-  // `user` is null when no one is logged in.
-  // Shape when populated: { id, email, role, firstName, lastName }
-  // Set by handleLogin (called from Login.jsx via the onLogin prop).
-  // Cleared by handleLogout.
-  //
-  // *** BUG FIXED (white page cause #1) ***
-  // Was: const [isLoggedIn, setIsLoggedIn] = useState(false)
-  // Every reference to `user` and `setUser` below threw ReferenceError on
-  // the very first render. React caught the crash and rendered nothing → white page.
-  const [user, setUser] = useState(null);
-
-  // ── Theme state ────────────────────────────────────────────────────────────
-  // 'light' | 'dark'. Toggled by the 🌙/☀️ button anywhere in the app.
+  const [user, setUser]   = useState(null);
   const [theme, setTheme] = useState('light');
 
   // ── Side-effect: apply theme to <html> ────────────────────────────────────
@@ -40,6 +28,56 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+
+  // When the app first mounts, ask Supabase "is there already a logged-in
+  // session stored in this browser?" (it keeps one in localStorage).
+  // If yes, pull the user out and set state — the dashboard appears
+  // immediately without needing to log in again.
+  useEffect(() => {
+
+      // getSession() is async — it checks localStorage for a saved token
+      // and validates it against Supabase.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+              // session.user has the same shape as signIn's data.user
+              const { id, email, user_metadata } = session.user;
+              setUser({
+                  id,
+                  email,
+                  role:      user_metadata.role,
+                  firstName: user_metadata.firstName,
+                  lastName:  user_metadata.lastName,
+              });
+          }
+          // If session is null, user stays null → Login screen shows
+      });
+
+      // onAuthStateChange fires whenever Supabase detects a login or logout —
+      // including when the session token expires or is revoked remotely.
+      // This keeps your app in sync automatically.
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (_event, session) => {
+              if (session) {
+                  const { id, email, user_metadata } = session.user;
+                  setUser({ id, email,
+                      role:      user_metadata.role,
+                      firstName: user_metadata.firstName,
+                      lastName:  user_metadata.lastName,
+                  });
+              } else {
+                  // session is null = user logged out or token expired
+                  setUser(null);
+              }
+          }
+      );
+
+      // Cleanup: unsubscribe when App unmounts (prevents memory leaks)
+      return () => subscription.unsubscribe();
+
+  }, []); // [] = run once on mount only
+
+
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -62,13 +100,11 @@ function App() {
    */
   const handleLogin = (userData) => setUser(userData);
 
-  /**
-   * handleLogout
-   * Called by: the Logout button in Nav below,
-   *            AND passed as `onLogout` to StudentDashboard.
-   * Clears `user` → re-render → Login screen is shown.
-   */
-  const handleLogout = () => setUser(null);
+  //clears Supabase session first, then clears React state
+  const handleLogout = async () => {
+      await supabase.auth.signOut(); // deletes the token from localStorage
+      setUser(null);                  // clears the user from React state
+  };
 
   // ── Shared nav bar ─────────────────────────────────────────────────────────
   // Used only for the fallback "coming soon" view (roles with no dashboard yet).

@@ -13,9 +13,9 @@ const DB = {
 
   // Enrollments — which student is in which course
   enrollments: [
-    { student_id: '123', course_id: 10 },
-    { student_id: '123', course_id: 11 },
-    { student_id: '123', course_id: 12 },
+    { student_id: 'b4791023-acca-430f-ae05-b63499afdbc0', course_id: 10 },
+    { student_id: 'b4791023-acca-430f-ae05-b63499afdbc0', course_id: 11 },
+    { student_id: 'b4791023-acca-430f-ae05-b63499afdbc0', course_id: 12 },
   ],
 
   // NEW — the assignment templates for each course

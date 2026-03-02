@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { mockAuth } from '../mockAuth';
+import { supabase } from '../supabaseClient';
 import './Login.css';
 
 function Login({ onLogin }) {
@@ -19,43 +19,74 @@ function Login({ onLogin }) {
         setLoading(true);
 
         if (isSignUp) {
-            // Logic to check if passwords match
+
+            // ── SIGN UP ────────────────────────────────────────────────────
+            // Guard: passwords must match before we even hit Supabase
             if (password !== confirmPassword) {
-                alert("Passwords do not match!");
+                alert('Passwords do not match!');
                 setLoading(false);
                 return;
             }
 
-            const { data, error } = await mockAuth.signUp(email, password, {
-                role,
-                firstName,
-                lastName,
-                departmentCode: role === 'instructor' ? departmentCode : null,
+            // supabase.auth.signUp creates a new user in Supabase Auth.
+            // The `options.data` object is stored as `user_metadata` on the
+            // auth user — this is how we attach role/name to the account.
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        role,
+                        firstName,
+                        lastName,
+                        // Only instructors have a department code, students get null
+                        departmentCode: role === 'instructor' ? departmentCode : null,
+                    },
+                },
             });
+
             if (error) {
+                // Supabase returns a human-readable message, e.g. "Email already registered"
                 alert(error.message);
             } else {
-                alert(`${data.user.user_metadata.firstName}, your ${role} account was created! Please log in.`);
+                // data.user.user_metadata mirrors exactly what we passed into options.data
+                alert(`${data.user.user_metadata.firstName}, your ${role} account was created! Please check your email to confirm, then log in.`);
                 setIsSignUp(false);
             }
-            } else {
-            const { data, error } = await mockAuth.signIn(email, password);
-            if (data) {
-                // Pull everything from user_metadata — same shape Supabase returns
-                const { id, email: userEmail, user_metadata } = data.user;
-                onLogin({
-                id,
-                email: userEmail,
-                role:      user_metadata.role,
-                firstName: user_metadata.firstName,
-                lastName:  user_metadata.lastName,
-                });
-            } else {
+
+        } else {
+
+            // ── SIGN IN ────────────────────────────────────────────────────
+            // signInWithPassword checks email + password against Supabase Auth.
+            // On success, Supabase also sets a session cookie automatically —
+            // that's what lets us restore the session on page refresh (Step 3).
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (error) {
+                // Common errors: "Invalid login credentials", "Email not confirmed"
                 alert(error.message);
+            } else {
+                // data.user is the full Supabase user object.
+                // user_metadata holds everything we saved during signUp.
+                const { id, email: userEmail, user_metadata } = data.user;
+
+                // Pass a clean, flat user object up to App.jsx via the onLogin prop.
+                // App.jsx stores this in its `user` state and routes to the dashboard.
+                onLogin({
+                    id,
+                    email:     userEmail,
+                    role:      user_metadata.role,
+                    firstName: user_metadata.firstName,
+                    lastName:  user_metadata.lastName,
+                });
             }
-            }
-            setLoading(false);
-        };
+        }
+
+        setLoading(false);
+    };
 
     return (
         <div className="login-page-wrapper">
