@@ -1,3 +1,40 @@
+
+How to open the site.
+Assuming you are using VScode:
+- Clone the Repo;
+- Open terminal;
+- cd elkapitan;
+- Type "npm install" (this will download the required library in the project folder) and enter;
+- Type "npm run dev" and enter;
+- A local server link should appear.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
