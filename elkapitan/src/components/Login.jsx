@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { mockAuth } from './mockAuth';
+import { mockAuth } from '../mockAuth';
 import './Login.css';
 
 function Login({ onLogin }) {
@@ -12,6 +12,7 @@ function Login({ onLogin }) {
     const [role, setRole] = useState('student'); // Dropdown state
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
+    const [departmentCode, setDepartmentCode] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -25,20 +26,36 @@ function Login({ onLogin }) {
                 return;
             }
 
-            await mockAuth.signUp(email, password, { 
-                role: role, 
-                firstName: firstName, 
-                lastName: lastName 
+            const { data, error } = await mockAuth.signUp(email, password, {
+                role,
+                firstName,
+                lastName,
+                departmentCode: role === 'instructor' ? departmentCode : null,
             });
-            alert(`${firstName}, your ${role} account was created! Please log in.`);
-            setIsSignUp(false);
-        } else {
+            if (error) {
+                alert(error.message);
+            } else {
+                alert(`${data.user.user_metadata.firstName}, your ${role} account was created! Please log in.`);
+                setIsSignUp(false);
+            }
+            } else {
             const { data, error } = await mockAuth.signIn(email, password);
-            if (data) onLogin();
-            else alert(error.message);
-        }
-        setLoading(false);
-    };
+            if (data) {
+                // Pull everything from user_metadata — same shape Supabase returns
+                const { id, email: userEmail, user_metadata } = data.user;
+                onLogin({
+                id,
+                email: userEmail,
+                role:      user_metadata.role,
+                firstName: user_metadata.firstName,
+                lastName:  user_metadata.lastName,
+                });
+            } else {
+                alert(error.message);
+            }
+            }
+            setLoading(false);
+        };
 
     return (
         <div className="login-page-wrapper">
@@ -83,6 +100,19 @@ function Login({ onLogin }) {
                                 />
                             </div>
                         </>
+                    )}
+
+                    {isSignUp && role === 'instructor' && (
+                        <div className="input-group">
+                            <span className="icon">🔢</span>
+                            <input 
+                                type="text" 
+                                placeholder="Department Code" 
+                                value={departmentCode} 
+                                onChange={(e) => setDepartmentCode(e.target.value)} 
+                                required 
+                            />
+                        </div>
                     )}
 
                     <div className="input-group">

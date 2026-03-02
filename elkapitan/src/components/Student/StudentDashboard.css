@@ -1,0 +1,244 @@
+/* StudentDashboard.css */
+
+/* ── Page wrapper ── */
+.student-dashboard {
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.student-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10%;
+  height: 70px;
+  border-bottom: 2px solid var(--text-primary);
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-color);
+  z-index: 100;
+}
+
+.student-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.student-header-logo {
+  width: 36px;
+  height: 36px;
+  filter: var(--logo-filter);
+}
+
+.student-header-brand {
+  font-size: 1.1rem;
+  font-weight: 200;
+  letter-spacing: 0.05em;
+}
+
+.student-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.student-greeting {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+
+
+/* ── Header buttons ── */
+.btn-theme,
+.btn-logout {
+  padding: 7px 16px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  transition: opacity 0.15s;
+}
+
+.btn-logout {
+  background-color: var(--accent-color);
+  color: #fff;
+  border: none;
+}
+
+.btn-theme:hover,
+.btn-logout:hover {
+  opacity: 0.8;
+}
+
+
+/* Breadcrumb navigation */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 0 15px 0;
+  font-size: 1.5rem;
+  margin: 0 10%;
+  font-weight: 400 !important;
+  border-bottom: 2px solid var(--text-primary);
+}
+
+.breadcrumb-link {
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.breadcrumb-link:hover {
+  color: var(--accent-color);
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+}
+
+.breadcrumb-separator {
+  color: var(--text-secondary);
+}
+
+
+
+/* ── Course list (main page) ── */
+
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 200;
+  padding: 40px 0 16px 0;
+  margin: 0 10%;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--text-primary);
+  
+  
+}
+
+.course-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 40px 10%;
+}
+
+.course-card {
+  border: 2px solid var(--text-primary);
+  padding: 24px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  border-radius: 4px;
+}
+
+.course-card:hover {
+  opacity: 0.6;
+}
+
+.course-card h2 {
+  font-size: 1.3rem;
+  font-weight: 300;
+  margin: 0;
+}
+
+
+/* Assignment list (2nd page) */
+
+.assignment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 10%;
+}
+
+.assignment-card {
+  border: 2px solid var(--text-primary);
+  padding: 24px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.assignment-card:hover {
+  opacity: 0.6;
+}
+
+.assignment-number {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0 0 6px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.assignment-name {
+  font-size: 1.2rem;
+  font-weight: 300;
+  margin: 0 0 8px 0;
+}
+
+.assignment-due {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.assignment-card-right {
+  flex-shrink: 0;
+}
+
+.status-submitted {
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  border: 1px solid #27ae60;
+  color: #27ae60;
+  border-radius: 2px;
+}
+
+.status-pending {
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
+  border-radius: 2px;
+}
+
+
+
+/* ── Loading skeleton ── */
+.skeleton-card {
+  border-top: 2px solid var(--border-color);
+  border-bottom: 2px solid var(--border-color);
+  padding: 24px 0;
+  margin-bottom: -2px;
+}
+
+.skeleton-line {
+  background: linear-gradient(90deg, var(--border-color) 25%, var(--card-bg) 50%, var(--border-color) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 2px;
+  height: 14px;
+  margin-bottom: 10px;
+}
+
+.skeleton-line.short  { width: 40%; }
+.skeleton-line.medium { width: 65%; }
+.skeleton-line.long   { width: 85%; }
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
