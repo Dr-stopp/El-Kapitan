@@ -27,11 +27,10 @@ public class SupabaseStorageService {
                 .build();
     }
 
-    public String upload(MultipartFile file) throws Exception {
-        String filename = file.getOriginalFilename();
-        if (filename == null || filename.isBlank()) filename = "upload.bin";
+    public String upload(MultipartFile file, long student, long assignment, String course) throws Exception {
+        String fileName = student + "-" + assignment + ".bin";
 
-        String objectPath = "uploads/" + sanitizeObjectName(filename);
+        String objectPath =  course + "/" + sanitizeObjectName(fileName);
 
         String endpoint = "/storage/v1/object/" + BUCKET + "/" + urlPathEncode(objectPath);
 

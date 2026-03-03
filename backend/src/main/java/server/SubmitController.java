@@ -5,6 +5,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.OffsetDateTime;
+
 @RestController
 public class SubmitController {
 
@@ -18,19 +20,19 @@ public class SubmitController {
 
     @PostMapping(path = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> submit(
-            @RequestPart("file") MultipartFile file
-            // You can also accept fields:
-            // @RequestPart(value="someField", required=false) String someField
+            @RequestPart("file") MultipartFile file,
+            @RequestPart("student") long student,
+            @RequestPart("assignment") long assignment,
+            @RequestPart("course") String course
     ) {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body("No file uploaded");
         }
 
         try {
-            String objectPath = storageService.upload(file);
-
-            // Example: call DB handler if needed
-            // dbHandler.saveUploadRecord(objectPath, file.getOriginalFilename());
+            String objectPath = storageService.upload(file, student, assignment, course);
+            long submissionID = dbHandler.generateSubmissionID();
+            dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
 
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");
         } catch (Exception e) {

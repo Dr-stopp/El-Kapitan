@@ -4,6 +4,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+
 @Service
 public class DBHandler {
 
@@ -15,51 +17,148 @@ public class DBHandler {
 
     }
 
+    public long generateSubmissionID() {
+        String sql = "SELECT nextval('submission_seq')";
+        return jdbc.queryForObject(sql, Long.class);
+    }
+
     @Transactional
     public void insertCourse(long courseId, String courseName) {
         String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
         jdbc.update(sql, courseId, courseName);
     }
 
-    @Transactional
-    public void insertCourseRun(long courseId, String courseName) {
-        String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
-        jdbc.update(sql, courseId, courseName);
-    }
+    // -------------------- course_runs --------------------
+    // columns: course_run_id, teacher, course_id
 
     @Transactional
-    public void insertAssignment(long courseId, String courseName) {
-        String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
-        jdbc.update(sql, courseId, courseName);
+    public void insertCourseRun(long courseRunId, long teacher, long courseId) {
+        String sql = "INSERT INTO public.\"course_runs\" (course_run_id, teacher, course_id) VALUES (?, ?, ?)";
+        jdbc.update(sql, courseRunId, teacher, courseId);
     }
 
-    @Transactional
-    public void insertAssignmentRun(long courseId, String courseName) {
-        String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
-        jdbc.update(sql, courseId, courseName);
-    }
+    // -------------------- Assignments --------------------
+    // columns: assign_id, course_id, language, name
 
     @Transactional
-    public void insertUser(long courseId, String courseName) {
-        String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
-        jdbc.update(sql, courseId, courseName);
+    public void insertAssignment(long assignId, long courseId, String language, String name) {
+        String sql = "INSERT INTO public.\"Assignments\" (assign_id, course_id, language, name) VALUES (?, ?, ?, ?)";
+        jdbc.update(sql, assignId, courseId, language, name);
     }
 
-    @Transactional
-    public void insertSubmission(long courseId, String courseName) {
-        String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
-        jdbc.update(sql, courseId, courseName);
-    }
+    // -------------------- assignment_runs --------------------
+    // columns: assignment_run_id, course_run_id, assign_id, due_date, top_k, threshold
 
     @Transactional
-    public void insertResult(long courseId, String courseName) {
-        String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
-        jdbc.update(sql, courseId, courseName);
+    public void insertAssignmentRun(
+            long assignmentRunId,
+            long courseRunId,
+            long assignId,
+            OffsetDateTime dueDate,
+            long topK,
+            long threshold
+    ) {
+        String sql = """
+            INSERT INTO public."assignment_runs"
+            (assignment_run_id, course_run_id, assign_id, due_date, top_k, threshold)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """;
+        jdbc.update(sql, assignmentRunId, courseRunId, assignId, dueDate, topK, threshold);
     }
 
+    // -------------------- Users --------------------
+    // columns: id, type, first_name, last_name, email, password, registration_date, password_last_change
+
     @Transactional
-    public void insertResultSection(long courseId, String courseName) {
-        String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
-        jdbc.update(sql, courseId, courseName);
+    public void insertUser(
+            long id,
+            String type,
+            String firstName,
+            String lastName,
+            String email,
+            String password,
+            OffsetDateTime registrationDate,
+            OffsetDateTime passwordLastChange
+    ) {
+        String sql = """
+            INSERT INTO public."Users"
+            (id, type, first_name, last_name, email, password, registration_date, password_last_change)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """;
+        jdbc.update(sql, id, type, firstName, lastName, email, password, registrationDate, passwordLastChange);
+    }
+
+    // -------------------- submissions --------------------
+    // columns: submission_id, created_at, assignment_run_id, student_id, folder_path
+
+    @Transactional
+    public void insertSubmission(
+            long submissionId,
+            OffsetDateTime createdAt,
+            long assignmentRunId,
+            long studentId,
+            String folderPath
+    ) {
+        String sql = """
+            INSERT INTO public."submissions"
+            (submission_id, created_at, assignment_run_id, student_id, folder_path)
+            VALUES (?, ?, ?, ?, ?)
+            """;
+        jdbc.update(sql, submissionId, createdAt, assignmentRunId, studentId, folderPath);
+    }
+
+    // -------------------- results --------------------
+    // columns: submission_1, submission_2, score, date_created, pair_id
+
+    @Transactional
+    public void insertResult(
+            long submission1,
+            long submission2,
+            long score,
+            OffsetDateTime dateCreated,
+            long pairId
+    ) {
+        String sql = """
+            INSERT INTO public."results"
+            (submission_1, submission_2, score, date_created, pair_id)
+            VALUES (?, ?, ?, ?, ?)
+            """;
+        jdbc.update(sql, submission1, submission2, score, dateCreated, pairId);
+    }
+
+    // -------------------- results_sections --------------------
+    // columns:
+    // section_id, pair_id, submission_1, submission_2,
+    // submission_1_sec_start, submission_2_sec_start,
+    // submission_1_sec_end, submission_2_sec_end,
+    // submission_1_file_name, submission_2_file_name
+
+    @Transactional
+    public void insertResultSection(
+            long sectionId,
+            long pairId,
+            long submission1,
+            long submission2,
+            long submission1SecStart,
+            long submission2SecStart,
+            long submission1SecEnd,
+            long submission2SecEnd,
+            String submission1FileName,
+            String submission2FileName
+    ) {
+        String sql = """
+            INSERT INTO public."results_sections"
+            (section_id, pair_id, submission_1, submission_2,
+             submission_1_sec_start, submission_2_sec_start,
+             submission_1_sec_end, submission_2_sec_end,
+             submission_1_file_name, submission_2_file_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """;
+        jdbc.update(sql,
+                sectionId, pairId, submission1, submission2,
+                submission1SecStart, submission2SecStart,
+                submission1SecEnd, submission2SecEnd,
+                submission1FileName, submission2FileName
+        );
     }
 }
