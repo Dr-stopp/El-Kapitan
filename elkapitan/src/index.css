@@ -1,0 +1,44 @@
+@font-face {
+  font-family: 'Source Sans 3';
+  src: url('./assets/SourceSans3-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200;
+}
+
+/* Default Light Mode Variables */
+:root {
+  --bg-color: #f4f4f4;
+  --card-bg: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #555555;
+  --accent-color: #004969;
+  --border-color: #dddddd;
+  --logo-filter: none; /* Black stays black in light mode */
+}
+
+/* Dark Mode Variables Override */
+[data-theme='dark'] {
+  --bg-color: #121212;
+  --card-bg: #1e1e1e;
+  --text-primary: #ffffff;
+  --text-secondary: #b0b0b0;
+  --accent-color: #004969;
+  --border-color: #333333;
+  --logo-filter: invert(1) brightness(2); /* Turns black to white */
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: "Source Sans 3", sans-serif !important;
+  transition: background-color 0.3s ease, color 0.3s ease; /* Smooth fade */
+  margin: 0;
+}
+
+html, body {
+  background-color: var(--bg-color); /* Apply to both to prevent top-gap flicker */
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}

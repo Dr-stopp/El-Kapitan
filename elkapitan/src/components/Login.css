@@ -1,0 +1,108 @@
+.login-page-wrapper {
+    display: flex;
+    height: 100vh;
+    padding: 0 10%;
+    align-items: center;
+    background-color: var(--bg-color); /* */
+}
+
+/* Left Section */
+.welcome-section {
+    flex: 1;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    position: absolute;
+    top: 40px;
+}
+
+.app-logo {
+    width: 50px;
+    height: 50px;
+    filter: var(--logo-filter); /* This will now react to the theme */
+    
+}
+
+.brand-name {
+    font-size: 1.8rem;
+    font-weight: 200;
+}
+
+.welcome-text {
+    font-size: 8rem;
+    font-weight: 200;
+    color: var(--text-primary);
+    opacity: 0.8;
+}
+
+/* Right Section - Transparent Card */
+.login-container {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.login-card-minimal {
+    width: 350px;
+    padding: 40px 0;
+    /* Transparent with only Top and Bottom borders */
+    border-top: 3px solid var(--text-primary);
+    border-bottom: 3px solid var(--text-primary);
+    background: transparent;
+}
+
+.role-selector {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    font-size: 1.2rem;
+}
+
+.role-selector select {
+    background: var(--accent-color); /* Muted brown from your image */
+    border: none;
+    padding: 5px 15px;
+    color: white;
+    cursor: pointer;
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+    border-bottom: 2px solid var(--text-primary);
+    margin-bottom: 20px;
+    padding: 5px 0;
+}
+
+.input-group input {
+    background: transparent !important;
+    border: none !important;
+    color: var(--text-primary);
+    width: 100%;
+    padding: 10px;
+    outline: none;
+}
+
+.submit-btn {
+    width: 100%;
+    margin-top: 30px;
+    padding: 12px;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.login-toggle-text {
+    text-align: center;
+    margin-top: 15px;
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: 0.8rem;
+    color: var(--text-secondary); /* */
+}
