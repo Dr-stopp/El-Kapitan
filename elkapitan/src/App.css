@@ -6,12 +6,16 @@
 }
 
 .top-nav {
-  height: 60px; /* Fixed height prevents layout shifts */
+  height: 10vh; /* Fixed height prevents layout shifts */
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   padding: 0 2rem;
   box-sizing: border-box;
+}
+
+.top-nav .btn-theme {
+  position: static;
 }
 
 .main-content {
@@ -35,17 +39,61 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.theme-btn, .logout-btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid var(--border-color);
-  background-color: var(--card-bg);
-  color: var(--text-primary);
+
+/* ── Header ── */
+
+
+.header-logo {
+  width: 36px;
+  height: 36px;
+  filter: var(--logo-filter);
 }
 
-.logout-btn {
-  background-color: #ff4d4d;
-  color: white;
+.header-brand {
+  font-size: 1.1rem;
+  font-weight: 200;
+  letter-spacing: 0.05em;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.landing-greeting {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ── Header buttons ── */
+.btn-theme,
+.btn-logout {
+  padding: 7px 16px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  transition: opacity 0.15s;
+}
+
+.btn-logout {
+  background-color: var(--accent-color);
+  color: #fff;
   border: none;
 }
+
+.btn-theme:hover,
+.btn-logout:hover {
+  opacity: 0.8;
+}
+
+

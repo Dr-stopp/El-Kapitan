@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import './Login.css';
 
-function Login({ onLogin }) {
+function Login({ onLogin, theme, onToggleTheme }) {
     
     const [isSignUp, setIsSignUp] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -95,6 +95,11 @@ function Login({ onLogin }) {
                     <img src="/perseverance.svg" alt="Logo" className="app-logo" />
                     <span className="brand-name">EL Kapitan</span>
                 </div>
+
+                <button className="btn-theme" onClick={onToggleTheme}>
+                    {theme === 'light' ? '🌙' : '☀️'}
+                </button>
+
                 <h1 className="welcome-text">Welcome</h1>
             </div>
 

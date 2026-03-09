@@ -58,7 +58,7 @@ export const mockAuth = {
                 // These are the values Login.jsx reads to build the user object
                 // it passes up to App.jsx via onLogin().
                 user_metadata: {
-                    role: 'student',
+                    role: 'instructor',
                     firstName: 'Alex',
                     lastName: 'Rivera',
                 },

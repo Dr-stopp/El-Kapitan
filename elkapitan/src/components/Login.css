@@ -3,7 +3,7 @@
     height: 100vh;
     padding: 0 10%;
     align-items: center;
-    background-color: var(--bg-color); /* */
+    
 }
 
 /* Left Section */
@@ -96,6 +96,18 @@
     border: none;
     cursor: pointer;
     font-size: 1rem;
+}
+
+.btn-theme {
+    position: absolute;
+    top: 5vh;
+    right: 10%;
+    padding: 7px 16px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.85rem;
 }
 
 .login-toggle-text {

@@ -13,6 +13,7 @@
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import StudentDashboard from './components/Student/StudentDashboard';
+import InstructorDashboard from './components/Instructor/InstructorDashboard';
 import './App.css';
 import { supabase } from './supabaseClient';
 
@@ -79,7 +80,7 @@ function App() {
 
 
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+   // ── Handlers ──────────────────────────────────────────────────────────────
 
   /**
    * toggleTheme
@@ -106,79 +107,71 @@ function App() {
       setUser(null);                  // clears the user from React state
   };
 
-  // ── Shared nav bar ─────────────────────────────────────────────────────────
-  // Used only for the fallback "coming soon" view (roles with no dashboard yet).
-  // StudentDashboard renders its own full header, so Nav is NOT used there.
-  const Nav = () => (
-    <nav className="top-nav">
-      <span>
-        {user?.firstName} {user?.lastName}
-      </span>
-      <div className="nav-controls">
-        <button onClick={toggleTheme} className="theme-btn">
-          {theme === 'light' ? '🌙' : '☀️'}
-        </button>
-        <button onClick={handleLogout} className="logout-btn">
-          Logout
-        </button>
-      </div>
-    </nav>
-  );
-
-  // ── Not logged in → show Login ─────────────────────────────────────────────
-  if (!user) {
-    return (
-      <div className="app-wrapper">
-        <nav className="top-nav">
-          <button onClick={toggleTheme} className="theme-btn">
-            {theme === 'light' ? '🌙' : '☀️'}
-          </button>
-        </nav>
-        <Login onLogin={handleLogin} />
-      </div>
-    );
-  }
-
-  // ── Student → StudentDashboard ─────────────────────────────────────────────
-  if (user.role === 'student') {
-    return (
-      <div className="app-wrapper">
-        {/*
-          *** BUG FIXED (white page cause #2) ***
-          Was: <StudentDashboard user={user} />
-          StudentDashboard.jsx needs all four props to render its header.
-          Without onLogout/onToggleTheme/theme the buttons threw errors.
-
-          onLogout      → wires dashboard Logout button to handleLogout
-          onToggleTheme → wires dashboard theme button to toggleTheme
-          theme         → tells dashboard which icon (🌙 or ☀️) to show
-        */}
-        <StudentDashboard
-          user={user}
-          onLogout={handleLogout}
-          onToggleTheme={toggleTheme}
-          theme={theme}
-        />
-      </div>
-    );
-  }
-
-  // ── Instructor (not built yet — uncomment when ready) ──────────────────────
-  // if (user.role === 'instructor') {
-  //   return (
-  //     <div className="app-wrapper">
-  //       <InstructorDashboard user={user} onLogout={handleLogout} />
-  //     </div>
-  //   );
-  // }
-
-  // ── Fallback for any unrecognised role ─────────────────────────────────────
+  // ── RENDER ─────────────────────────────────────────────────────────────────
+  // Instead of separate return statements for each case, we render ONE structure
+  // with a global header that appears for everyone, then conditionally show
+  // the appropriate content below based on login state and role.
+  
   return (
     <div className="app-wrapper">
-      <Nav />
-      <main className="main-content">
-        <h1>Dashboard coming soon</h1>
-      </main>
+      
+      {/* ── GLOBAL HEADER ──────────────────────────────────────────────────── */}
+      {/* This header only appears when the user is logged in */}
+      {/* Shows: logo, brand, user name, theme toggle, and logout */}
+      {user && (
+        <header className="top-nav">
+          
+          {/* Left side - logo and brand */}
+          <div className="header-left">
+            <img src="/perseverance.svg" alt="Logo" className="header-logo" />
+            <span className="header-brand">EL Kapitan</span>
+          </div>
+          
+          {/* Right side - user controls */}
+          <div className="header-right">
+            
+            {/* User's full name */}
+            <span className="landing-greeting">
+              {user.firstName} {user.lastName}
+            </span>
+            
+            {/* Theme toggle */}
+            <button className="btn-theme" onClick={toggleTheme}>
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
+            
+            {/* Logout button */}
+            <button className="btn-logout" onClick={handleLogout}>
+              Logout
+            </button>
+            
+          </div>
+        </header>
+      )}
+
+      {/* ── MAIN CONTENT ───────────────────────────────────────────────────── */}
+      {/* Conditionally render different views based on user state */}
+      
+      {/* Not logged in → show Login */}
+      {!user && <Login onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />}
+      
+      {/* Logged in as student → show StudentDashboard */}
+      {user?.role === 'student' && (
+        <StudentDashboard user={user} onLogout={handleLogout} />
+      )}
+      
+      {/* Logged in as instructor → show InstructorDashboard */}
+      {user?.role === 'instructor' && (
+        <InstructorDashboard user={user} onLogout={handleLogout} />
+      )}
+      
+      {/* Logged in but unrecognized role → show fallback */}
+      {user && user.role !== 'student' && user.role !== 'instructor' && (
+        <main className="main-content">
+          <h1>Dashboard coming soon</h1>
+        </main>
+      )}
+      
     </div>
   );
 }

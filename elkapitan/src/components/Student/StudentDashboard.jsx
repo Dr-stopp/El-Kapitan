@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { mockDB } from './mockDB.js';
+import { mockDB } from '../../mockDB.js';
+import '../Dashboard.css';
 import './StudentDashboard.css';
+import { formatDueDate } from '../../utils.js';
 import { supabase } from '../../supabaseClient.js';
 
-export default function StudentDashboard({ user, onLogout, onToggleTheme, theme }) {
+export default function StudentDashboard({ user }) {
 
     // This is where we store the courses once they load from mockDB
     // Starts as an empty array — no courses yet
@@ -45,7 +47,7 @@ export default function StudentDashboard({ user, onLogout, onToggleTheme, theme 
 
       // Build the file path inside the bucket
       // e.g. submissions/123/300/hello_world.py
-      const filePath = `${user.id}/${selectedAssignment.assignment_run_id}/${selectedFile.name}`;
+      const filePath = `${user.id}/${selectedAssignment.deployment_id}/${selectedFile.name}`;
 
       // Upload to Supabase Storage bucket called 'submissions'
       const { data, error } = await supabase.storage
@@ -84,31 +86,17 @@ export default function StudentDashboard({ user, onLogout, onToggleTheme, theme 
         setAssignmentsLoading(true);
 
         mockDB.getAssignmentsForCourse(selectedCourse.course_id).then((data) => {
-          setAssignments(data);
+          // Only show assignments the instructor has made visible
+          const visibleOnly = data.filter(a => a.is_visible === true);
+          setAssignments(visibleOnly);
           setAssignmentsLoading(false);
         });
     }, [selectedCourse]); // runs whenever selectedCourse changes
 
 
     return (
-      <div className="student-dashboard">
 
-        {/* Header — never changes */}
-        <header className="student-header">
-          <div className="student-header-left">
-            <img src="/perseverance.svg" alt="Logo" className="student-header-logo" />
-            <span className="student-header-brand">EL Kapitan</span>
-          </div>
-          <div className="student-header-right">
-            <span className="student-greeting">
-              {user.firstName} {user.lastName}
-            </span>
-            <button className="btn-theme" onClick={onToggleTheme}>
-              {theme === 'light' ? '🌙' : '☀️'}
-            </button>
-            <button className="btn-logout" onClick={onLogout}>Logout</button>
-          </div>
-        </header>
+      <div className="dashboard">
 
         {/* ── Breadcrumb ── */}
         <div className="breadcrumb">
@@ -180,14 +168,14 @@ export default function StudentDashboard({ user, onLogout, onToggleTheme, theme 
                 {assignments.map((item, index) => (
                   <div 
                     className="assignment-card" 
-                    key={item.assignment_run_id}
+                    key={item.deployment_id}
                     onClick={() => setSelectedAssignment({ ...item, number: index + 1 })}
                   >
 
                     <div className="assignment-card-left">
                       <p className="assignment-number">Assignment {index + 1}</p>
                       <h2 className="assignment-name">{item.name}</h2>
-                      <p className="assignment-due">Due: {item.due_date}</p>
+                      <p className="assignment-due">Due: {formatDueDate(item.due_date)}</p>
                     </div>
 
                     <div className="assignment-card-right">
@@ -211,7 +199,7 @@ export default function StudentDashboard({ user, onLogout, onToggleTheme, theme 
           <div className="submission-header">
             <p className="submission-assignment-number">Assignment {selectedAssignment.number}</p>
             <h2 className="submission-title">{selectedAssignment.name}</h2>
-            <p className="submission-due">Due: {selectedAssignment.due_date}</p>
+            <p className="submission-due">Due: {formatDueDate(selectedAssignment.due_date)}</p>
           </div>
 
           <div className="drop-zone">
