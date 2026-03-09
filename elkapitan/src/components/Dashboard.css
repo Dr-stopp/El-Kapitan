@@ -124,6 +124,17 @@
   opacity: 0.6;
 }
 
+/* Buttons sit above the overlay using z-index */
+/* .assignment-card .btn-edit,
+.assignment-card .btn-delete,
+.assignment-card .status-visible,
+.assignment-card .status-hidden,
+.assignment-card .status-submitted,
+.assignment-card .status-pending {
+  position: relative;
+  z-index: 1;
+} */
+
 /* Buttons dim when card is hovered */
 .assignment-card:hover .btn-edit,
 .assignment-card:hover .btn-delete,
@@ -131,8 +142,9 @@
 .assignment-card:hover .status-hidden,
 .assignment-card:hover .status-submitted,
 .assignment-card:hover .status-pending {
-  opacity: 0.4;
+  opacity: 0.6;
   transition: opacity 0.2s;
+  
 }
 
 /* Buttons restore to full when directly hovered */
@@ -143,6 +155,7 @@
 .assignment-card:hover .status-submitted:hover,
 .assignment-card:hover .status-pending:hover {
   opacity: 1;
+  z-index: 1; /* sits above the ::after overlay */
 }
 
 

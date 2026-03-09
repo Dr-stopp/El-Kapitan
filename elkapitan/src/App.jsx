@@ -20,7 +20,10 @@ import { supabase } from './supabaseClient';
 function App() {
 
   const [user, setUser]   = useState(null);
-  const [theme, setTheme] = useState('light');
+  //saving in local storage so it doesnt rest on reload
+  const [theme, setTheme] = useState(
+    localStorage.getItem('theme') || 'light'
+  );
 
   // ── Side-effect: apply theme to <html> ────────────────────────────────────
   // Stamps data-theme="light|dark" on the root <html> element so the CSS
@@ -86,11 +89,13 @@ function App() {
    * toggleTheme
    * Flips 'light' ↔ 'dark'.
    * Called by: the theme button in the Nav below,
-   *            AND passed as `onToggleTheme` to StudentDashboard so its
-   *            own header button works.
    */
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setTheme((prev) => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      localStorage.setItem('theme', next);
+      return next;
+    });
   };
 
   /**
