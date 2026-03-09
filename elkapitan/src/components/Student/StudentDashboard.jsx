@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { mockDB } from '../../mockDB.js';
+//import { mockDB } from '../../mockDB.js';
 import '../Dashboard.css';
 import './StudentDashboard.css';
 import { formatDueDate } from '../../utils.js';
@@ -67,17 +67,38 @@ export default function StudentDashboard({ user }) {
 
 
     // This runs once when the dashboard first appears on screen
-    // Same idea as a constructor in Java — do your setup here
     useEffect(() => {
 
-      // Call mockDB, pass the logged in user's id
-      // When it comes back, store the result in courses state
-      mockDB.getStudentCourses(user.id).then((data) => {
-        setCourses(data);   // store the courses
-        setLoading(false);  // done loading
-      });
+        // Query the enrollments table for all courses this student is enrolled in
+        // select('course_id, courses(course_name)') is Supabase's way of doing a JOIN
+        // it follows the foreign key from enrollments → courses automatically
+        supabase
+          .from('enrollments')
+          .select('course_id, courses(course_name)')
+          .eq('student_id', user.id)        // WHERE student_id = user.id
+          .then(({ data, error }) => {
+            
+            if (error) { 
+              console.error(error); 
+              return; 
+            }
+            
+            // data comes back as:
+            // [{ course_id: 1, courses: { course_name: 'Intro to CS' } }, ...]
+            // we flatten it into the same shape mockDB was returning
+            const courses = data.map(row => ({
+              course_id:   row.course_id,
+              course_name: row.courses.course_name,
+            }));
 
-    }, []); // the [] means run once on load, never again
+            setCourses(courses);
+            setLoading(false);
+          });
+
+    }, []); // runs once on mount
+
+
+
 
     useEffect(() => {
 
@@ -85,12 +106,34 @@ export default function StudentDashboard({ user }) {
         
         setAssignmentsLoading(true);
 
-        mockDB.getAssignmentsForCourse(selectedCourse.course_id).then((data) => {
-          // Only show assignments the instructor has made visible
-          const visibleOnly = data.filter(a => a.is_visible === true);
-          setAssignments(visibleOnly);
-          setAssignmentsLoading(false);
-        });
+        // Query assignment_deployments for all visible assignments in this course
+        // select follows foreign keys to grab assignment name and description too
+        supabase
+          .from('assignment_deployments')
+          .select('deployment_id, due_date, is_visible, assignments(name, description)')
+          .eq('course_id', selectedCourse.course_id)  // WHERE course_id = selectedCourse.course_id
+          .eq('is_visible', true)                      // AND is_visible = true
+          .then(({ data, error }) => {
+
+            if (error) {
+              console.error(error);
+              return;
+            }
+
+            // data comes back as:
+            // [{ deployment_id: 1, due_date: '...', is_visible: true, assignments: { name: '...', description: '...' } }]
+            // flatten it into the same shape the rest of the component expects
+            const assignments = data.map(row => ({
+              deployment_id: row.deployment_id,
+              due_date:      row.due_date,
+              is_visible:    row.is_visible,
+              name:          row.assignments.name,
+              description:   row.assignments.description,
+            }));
+
+            setAssignments(assignments);
+            setAssignmentsLoading(false);
+          });
     }, [selectedCourse]); // runs whenever selectedCourse changes
 
 

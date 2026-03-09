@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { mockDB } from '../../mockDB.js';
+//import { mockDB } from '../../mockDB.js';
+import { supabase } from '../../supabaseClient.js';
 import '../Dashboard.css';
 import './InstructorDashboard.css'
 import { formatDueDate } from '../../utils.js';
@@ -40,10 +41,32 @@ export default function InstructorDashboard({ user }) {
     useEffect(() => {
 
         // Fetch all courses this instructor teaches
-        // user.id is the logged-in instructor's ID
-        mockDB.getInstructorCourses(user.id).then((data) => {
-            setCourses(data);   // Store the courses in state
-            setLoading(false);  // Done loading
+        // Query instructor_courses for all courses this instructor teaches
+        // follows foreign key from instructor_courses → courses to get course name
+        supabase
+        .from('instructor_courses')
+        .select('course_id, courses(course_name)')
+        .eq('instructor_id', user.id)        // WHERE instructor_id = user.id
+        .then(({ data, error }) => {
+
+            console.log('data:', data);
+            console.log('error:', error);
+
+            if (error) {
+            console.error(error);
+            return;
+            }
+
+            // data comes back as:
+            // [{ course_id: 1, courses: { course_name: 'Intro to CS' } }, ...]
+            // flatten into same shape the rest of the component expects
+            const courses = data.map(row => ({
+            course_id:   row.course_id,
+            course_name: row.courses.course_name,
+            }));
+
+            setCourses(courses);
+            setLoading(false);
         });
 
     }, []); // Empty array = run once on mount, never again
@@ -54,8 +77,33 @@ export default function InstructorDashboard({ user }) {
 
         setAssignmentsLoading(true);
 
-        mockDB.getAssignmentsForCourseInstructor(selectedCourse.course_id).then((data) => {
-            setAssignments(data);
+        // Query assignment_deployments for all assignments in this course
+        // instructor sees ALL assignments regardless of is_visible
+        // follows foreign key to grab name and description from assignments table
+        supabase
+        .from('assignment_deployments')
+        .select('deployment_id, assignment_id, due_date, is_visible, assignments(name, description)')
+        .eq('course_id', selectedCourse.course_id)  // WHERE course_id = selectedCourse.course_id
+        .then(({ data, error }) => {
+
+            if (error) {
+            console.error(error);
+            return;
+            }
+
+            // data comes back as:
+            // [{ deployment_id: 1, assignment_id: 1, due_date: '...', is_visible: true, assignments: { name: '...', description: '...' } }]
+            // flatten into same shape the rest of the component expects
+            const assignments = data.map(row => ({
+            deployment_id: row.deployment_id,
+            assignment_id: row.assignment_id,
+            due_date:      row.due_date,
+            is_visible:    row.is_visible,
+            name:          row.assignments.name,
+            description:   row.assignments.description,
+            }));
+
+            setAssignments(assignments);
             setAssignmentsLoading(false);
         });
     }, [selectedCourse]);
