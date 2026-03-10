@@ -35,13 +35,13 @@ public class MultiLangTokenizer {
         Lexer lexer = null;
 
         if (filePath.endsWith(".java")) {
-            lexer = new com.mycompany.javatokenizer.JavaLexer(input);
+            lexer = new JavaLexer(input);
         } 
         else if (filePath.endsWith(".c")) {
-            //lexer = new com.mycompany.javatokenizer.CLexer(input);
+            lexer = new CLexer(input);
         } 
         else if (filePath.endsWith(".cpp")) {
-            lexer = new com.mycompany.javatokenizer.CPP14Lexer(input);
+            lexer = new CPP14Lexer(input);
         } 
         else {
             throw new IllegalArgumentException("Unsupported file type");
