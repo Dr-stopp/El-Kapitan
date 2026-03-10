@@ -4,6 +4,7 @@
 
 package Tokenizer.src;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -14,7 +15,7 @@ import java.util.List;
 public class JavaTokenizer {
     public JavaTokenizer() throws IOException{
         MultiLangTokenizer multi = new MultiLangTokenizer();
-        List<Node> l =multi.tokenize("backend/testFiles/Test.java");
+        List<Node> l = multi.tokenize("backend/testFiles/Test.c");
         for(Node n : l){
             System.out.println("Line Number: " + n.LineNumber + " Token: " + n.token.getText());
         }
