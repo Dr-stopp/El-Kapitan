@@ -1,5 +1,5 @@
 // Generated from CPP14Lexer.g4 by ANTLR 4.13.2
-package com.mycompany.javatokenizer;
+package Tokenizer.src;
 import org.antlr.v4.runtime.Lexer;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.Token;
