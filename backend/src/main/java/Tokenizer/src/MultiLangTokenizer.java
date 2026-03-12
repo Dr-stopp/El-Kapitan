@@ -5,8 +5,9 @@
 package Tokenizer.src;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import org.antlr.v4.runtime.*;
 
 import java.io.IOException;
@@ -14,17 +15,21 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class MultiLangTokenizer {
-    List<String> ignoredTokens = new LinkedList();
+    List<String> ignoredTokens = new LinkedList<>();
     
     public MultiLangTokenizer() throws FileNotFoundException, IOException{
-         try (BufferedReader reader = new BufferedReader(new FileReader("backend/src/Main/resources/Ignore.txt"))) {
+         InputStream ignoreStream = MultiLangTokenizer.class.getResourceAsStream("/Ignore.txt");
+         if (ignoreStream == null) {
+            return;
+         }
+
+         try (BufferedReader reader = new BufferedReader(new InputStreamReader(ignoreStream))) {
             String line = reader.readLine();
             while(line !=null){
                 ignoredTokens.add(line);
                 System.out.println(line);
                 line = reader.readLine();
             }
-            tokenize("backend/testFiles/Test.java");
         }
          
     }
@@ -48,7 +53,7 @@ public class MultiLangTokenizer {
         }
 
         Token token;
-        List<Node> tokenList = new LinkedList();
+        List<Node> tokenList = new LinkedList<>();
         while ((token = lexer.nextToken()).getType() != Token.EOF) {
     if (token.getChannel() == Token.DEFAULT_CHANNEL) {
 
