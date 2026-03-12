@@ -135,7 +135,7 @@ export default function InstructorDashboard({ user }) {
     // Handles both create and edit form submission
     // If editingAssignment is 'create' — adds a new assignment to mockDB
     // If editingAssignment is an object — updates the existing assignment
-    const handleFormSubmit = () => {
+    const handleFormSubmit = async () => {
 
         // Guard — don't submit if required fields are empty
         if (!formName || !formDueDate || !formDueTime) {
@@ -144,29 +144,74 @@ export default function InstructorDashboard({ user }) {
         }
 
         // Combine date and time back into one string to match the stored format
-        // e.g. '2026-03-10' + '23:59' → '2026-03-10T23:59:00Z'
         const due_date = `${formDueDate}T${formDueTime}:00Z`;
 
         if (editingAssignment === 'create') {
 
-            // Build a new assignment object
-            // assign_id and assignment_deploy_id are generated from timestamp (like mockDB does for users)
-            const newAssignment = {
-                deployment_id: Date.now(),
-                assignment_id: Date.now(),
+            // 1. Insert into assignments, get back the new assignment_id
+            const { data: assignmentData, error: error1 } = await supabase
+                .from('assignments')
+                .insert({ name: formName, description: formDescription })
+                .select()
+                .single();
+
+            if (error1) {
+                alert('Failed to create assignment.');
+                return;
+            }
+
+            // 2. Insert into assignment_deployments using the returned assignment_id
+            const { data: deploymentData, error: error2 } = await supabase
+                .from('assignment_deployments')
+                .insert({
+                    assignment_id: assignmentData.assignment_id,
+                    course_id: selectedCourse.course_id,
+                    due_date: due_date,
+                    is_visible: false,
+                })
+                .select()
+                .single();
+
+            if (error2) {
+                alert('Failed to deploy assignment.');
+                return;
+            }
+
+            // Only update local state after both inserts succeeded
+            setAssignments((prev) => [...prev, {
+                deployment_id: deploymentData.deployment_id,
+                assignment_id: assignmentData.assignment_id,
                 name: formName,
                 description: formDescription,
                 due_date: due_date,
-                is_visible: false, // new assignments are hidden by default
-            };
-
-            // Add to local state — mockDB doesn't support writes yet
-            setAssignments((prev) => [...prev, newAssignment]);
+                is_visible: false,
+            }]);
 
         } else {
 
-            // Update the existing assignment in local state
-            // Map through assignments, replace the one that matches
+            // Update name + description in the assignments table
+            const { error: error1 } = await supabase
+                .from('assignments')
+                .update({ name: formName, description: formDescription })
+                .eq('assignment_id', editingAssignment.assignment_id);
+
+            if (error1) {
+                alert('Failed to update assignment.');
+                return;
+            }
+
+            // Update due_date in the assignment_deployments table
+            const { error: error2 } = await supabase
+                .from('assignment_deployments')
+                .update({ due_date: due_date })
+                .eq('deployment_id', editingAssignment.deployment_id);
+
+            if (error2) {
+                alert('Failed to update due date.');
+                return;
+            }
+
+            // Only update local state after both Supabase calls succeeded
             setAssignments((prev) =>
                 prev.map((a) =>
                     a.deployment_id === editingAssignment.deployment_id
@@ -183,9 +228,22 @@ export default function InstructorDashboard({ user }) {
     // Flips the visible property of an assignment when the badge is clicked
     // true → false (hides from students)
     // false → true (shows to students)
-    const handleToggleVisibility = (assignmentDeployId) => {
+    const handleToggleVisibility = async (assignmentDeployId) => {
 
-        // Map through assignments, flip visible on the one that matches
+        // Find the assignment so we know the current is_visible value to flip
+        const assignment = assignments.find(a => a.deployment_id === assignmentDeployId);
+
+        const { error } = await supabase
+            .from('assignment_deployments')
+            .update({ is_visible: !assignment.is_visible })
+            .eq('deployment_id', assignmentDeployId);
+
+        if (error) {
+            alert('Failed to update visibility.');
+            return;
+        }
+
+        // Only update local state after Supabase succeeded
         setAssignments((prev) =>
             prev.map((a) =>
                 a.deployment_id === assignmentDeployId
@@ -197,13 +255,22 @@ export default function InstructorDashboard({ user }) {
 
     // Removes an assignment from the list when the instructor clicks delete
     // Filters out the assignment that matches the given assignment_deploy_id
-    const handleDeleteAssignment = (assignmentDeployId) => {
+    const handleDeleteAssignment = async (assignmentDeployId) => {
 
-        // Ask for confirmation before deleting
         const confirmed = window.confirm('Are you sure you want to delete this assignment?');
         if (!confirmed) return;
 
-        // Filter out the deleted assignment from local state
+        const { error } = await supabase
+            .from('assignment_deployments')
+            .delete()
+            .eq('deployment_id', assignmentDeployId);
+
+        if (error) {
+            alert('Failed to delete assignment.');
+            return;
+        }
+
+        // Only update local state after Supabase succeeded
         setAssignments((prev) =>
             prev.filter(a => a.deployment_id !== assignmentDeployId)
         );
