@@ -32,6 +32,7 @@ public class SubmitController {
         try {
             String objectPath = storageService.upload(file, student, assignment, course);
             long submissionID = dbHandler.generateSubmissionID();
+            resultsManager.generateResults(file, course, assignment);
             dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
 
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");

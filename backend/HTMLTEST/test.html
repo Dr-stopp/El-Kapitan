@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<body>
+<input type = "">
+<input type="file" id="submission"></input>
+<br>
+<button onclick="send()" > Submit </button>
+
+<script>
+    function send() {
+      fileInput = document.getElementById("submission");
+      file = fileInput.files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append(,student);
+      formData.append(,assignment);
+      formData.append(,course);
+
+      fetch("http://localhost:8080/submit", {
+        method: "submit",
+        body: formData
+      })
+      .then(res => res.text())
+      .then(text => console.log(text));
+    }
+  </script>
+
+</body>
+</html>

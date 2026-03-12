@@ -30,7 +30,7 @@ public class SupabaseStorageService {
     public String upload(MultipartFile file, long student, long assignment, String course) throws Exception {
         String fileName = student + "-" + assignment + ".bin";
 
-        String objectPath =  course + "/" + sanitizeObjectName(fileName);
+        String objectPath =  course + "/" + assignment + "/" + sanitizeObjectName(fileName);
 
         String endpoint = "/storage/v1/object/" + BUCKET + "/" + urlPathEncode(objectPath);
 
