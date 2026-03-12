@@ -1,3 +1,14 @@
+/**
+ * InstructorDashboard Component
+ * 
+ * This component provides an instructor-facing dashboard for managing courses and assignments.
+ * - Displays a list of courses taught by the instructor.
+ * - Allows selection of a course to view, create, edit, and delete assignments.
+ * - Supports toggling assignment visibility and editing assignment details.
+ * - Uses breadcrumbs for navigation between course list, assignment list, and assignment form views.
+ * - Fetches and updates data via Supabase.
+ */
+
 import React, { useState, useEffect } from 'react';
 //import { mockDB } from '../../mockDB.js';
 import { supabase } from '../../supabaseClient.js';
@@ -117,30 +128,22 @@ export default function InstructorDashboard({ user }) {
     // If editing — pre-fill the form with the assignment's current values
     // If creating — clear all fields
     useEffect(() => {
-        
-        if (editingAssignment && editingAssignment !== 'create') {
-            // No more .split('T') or manual string manipulation!
+    // If we are creating or if the form is closed, reset the fields
+    if (!editingAssignment || editingAssignment === 'create') {
+        setFormName('');
+        setFormDescription('');
+        setFormDueDate('');
+        setFormDueTime('');
+    } else {
+
+            // Pre-fill form using the Date object we created in the fetch effect
             setFormName(editingAssignment.name);
             setFormDescription(editingAssignment.description);
-            
-            // Use the object we cleaned earlier
             setFormDueDate(editingAssignment.due_date.toLocaleDateString('en-CA'));
             setFormDueTime(editingAssignment.due_date.toLocaleTimeString('en-GB', { 
                 hour: '2-digit', 
                 minute: '2-digit' 
-
             }));
-
-        } else {
-
-            // Pre-fill form with existing assignment data
-            setFormName(editingAssignment.name);
-            setFormDescription(editingAssignment.description);
-            // Expected format: ISO 8601 string (e.g., 'YYYY-MM-DDTHH:MM:SSZ')
-            // split on 'T' to separate the date and time parts
-            const [date, time] = editingAssignment.due_date.split('T');
-            setFormDueDate(date);
-            setFormDueTime(time.slice(0, 5)); // keep only HH:MM, drop seconds and Z
         }
     }, [editingAssignment]);
 
@@ -204,21 +207,28 @@ export default function InstructorDashboard({ user }) {
         } else {
 
             // --- EDIT LOGIC ---
+            // 1. Update core assignment info
             const { error: error1 } = await supabase
                 .from('assignments')
                 .update({ name: formName, description: formDescription })
                 .eq('assignment_id', editingAssignment.assignment_id);
 
+            if (error1) {
+                alert('Failed to update assignment details.');
+                return; // Stop execution here
+            }
+
+            // 2. Update deployment info (due date) only if step 1 worked
             const { error: error2 } = await supabase
                 .from('assignment_deployments')
                 .update({ due_date: utcStringForDB })
                 .eq('deployment_id', editingAssignment.deployment_id);
 
-            if (error1 || error2) {
-                alert('Failed to update assignment.');
+            if (error2) {
+                alert('Failed to update assignment due date.');
                 return;
             }
-
+            
             // Only update local state after both Supabase calls succeeded
             setAssignments((prev) =>
                 prev.map((a) =>
