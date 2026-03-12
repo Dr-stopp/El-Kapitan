@@ -20,7 +20,7 @@ public class SupabaseStorageService {
     private final WebClient webClient;
     private final String apiKey;
 
-    public SupabaseStorageService(WebClient.Builder builder, @Value("${my.api.key}") String apiKey) {
+    public SupabaseStorageService(WebClient.Builder builder, @Value("${api.key}") String apiKey) {
         this.apiKey = apiKey;
         this.webClient = builder
                 .baseUrl(SUPABASE_URL)
