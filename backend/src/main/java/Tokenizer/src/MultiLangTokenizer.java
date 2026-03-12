@@ -1,4 +1,3 @@
-
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
@@ -25,6 +24,7 @@ public class MultiLangTokenizer {
                 System.out.println(line);
                 line = reader.readLine();
             }
+            tokenize("testFiles/Test.java");
         }
 
     }
@@ -63,6 +63,12 @@ public class MultiLangTokenizer {
                 if(ignore ==0){
                     Node n = new Node(line,token,tokenName);
                     tokenList.add(n);
+                    System.out.println(
+                            "Line " + line +
+                                    ", Column " + column +
+                                    " -> " + tokenName +
+                                    " : " + token.getText()
+                    );
                 }
 
             }
