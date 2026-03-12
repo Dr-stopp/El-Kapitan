@@ -117,7 +117,7 @@ export default function InstructorDashboard({ user }) {
     // If editing — pre-fill the form with the assignment's current values
     // If creating — clear all fields
     useEffect(() => {
-
+        
         if (editingAssignment && editingAssignment !== 'create') {
             // No more .split('T') or manual string manipulation!
             setFormName(editingAssignment.name);
