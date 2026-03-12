@@ -80,7 +80,7 @@ export default function InstructorDashboard({ user }) {
             setLoading(false);
         });
 
-    }, []); // Empty array = run once on mount, never again
+    }, [user.id]); // Empty array = run once on mount, never again
 
     // Runs whenever selectedCourse changes — fetches assignments for that course
     useEffect(() => {
