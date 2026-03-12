@@ -16,6 +16,7 @@ import java.util.List;
 
 public class resultsManager {
     public static void generateResults(MultipartFile file, String course, long assignment) throws IOException {
+        System.out.println("Generating Results:");
         List<File> files = new LinkedList<>();
         MultipartFile mpf1;
         MultipartFile mpf2;
@@ -41,6 +42,7 @@ public class resultsManager {
                 i++;
             }
         }
+        System.out.println("Running comparison on " + files.size() + " files.");
         for (File f : files) {
             new PlagiarismChecker(f1, f);
         }
