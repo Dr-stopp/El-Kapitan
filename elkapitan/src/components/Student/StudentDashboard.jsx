@@ -200,7 +200,7 @@ export default function StudentDashboard({ user }) {
           <main className="student-body">
             
             {loading ? (
-              <p>Loading...</p>
+              <div className="spinner"></div>
             ) : (
               <div className="course-list">
                 {courses.map((course) => (
@@ -223,7 +223,7 @@ export default function StudentDashboard({ user }) {
             
             
             {assignmentsLoading ? (
-              <p>Loading...</p>
+              <div className="spinner"></div>
             ) : (
               <div className="assignment-list">
                 {assignments.map((item, index) => (
