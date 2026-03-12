@@ -61,7 +61,7 @@ public class MultiLangTokenizer {
             if (tokenName.equals(s)){ ignore =1;break;}
         }
         if(ignore ==0){
-            Node n = new Node(line,token);
+            Node n = new Node(line,token,tokenName);
             tokenList.add(n);
             System.out.println(
             "Line " + line +
