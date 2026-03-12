@@ -142,97 +142,229 @@ export default function InstructorDashboard({ user }) {
     // Handles both create and edit form submission
     // If editingAssignment is 'create' — adds a new assignment to Supabase
     // If editingAssignment is an object — updates the existing assignment
+    
+    // const handleFormSubmit = async () => {
+
+    //     // Guard — don't submit if required fields are empty
+    //     if (!formData.name || !formData.dueDate || !formData.dueTime) {
+    //         alert('Please fill in the assignment name, due date, and due time.');
+    //         return;
+    //     }
+
+    //     // Convert local form inputs into a UTC ISO string for Supabase
+    //     const localDateObj = new Date(`${formData.dueDate}T${formData.dueTime}`);
+    //     const utcStringForDB = localDateObj.toISOString();
+
+    //     if (editingAssignment === 'create') {
+
+    //         // 1. Insert into assignments, get back the new assignment_id
+    //         const { data: assignmentData, error: error1 } = await supabase
+    //             .from('assignments')
+    //             .insert({ name: formData.name, description: formData.description })
+    //             .select()
+    //             .single();
+
+    //         if (error1) {
+    //             alert('Failed to create assignment.');
+    //             return;
+    //         }
+
+    //         // 2. Insert into assignment_deployments using the returned assignment_id
+    //         const { data: deploymentData, error: error2 } = await supabase
+    //             .from('assignment_deployments')
+    //             .insert({
+    //                 assignment_id: assignmentData.assignment_id,
+    //                 course_id:     selectedCourse.course_id,
+    //                 due_date:      utcStringForDB,
+    //                 is_visible:    false,
+    //             })
+    //             .select()
+    //             .single();
+
+    //         if (error2) {
+    //             alert('Failed to deploy assignment.');
+    //             return;
+    //         }
+
+    //         // Only update local state after both inserts succeeded
+    //         setAssignments((prev) => [...prev, {
+    //             deployment_id: deploymentData.deployment_id,
+    //             assignment_id: assignmentData.assignment_id,
+    //             name:          formData.name,
+    //             description:   formData.description,
+    //             due_date:      localDateObj,
+    //             is_visible:    false,
+    //         }]);
+
+    //     } else {
+
+    //         // --- EDIT LOGIC ---
+    //         // 1. Update core assignment info
+    //         const { error: error1 } = await supabase
+    //             .from('assignments')
+    //             .update({ name: formData.name, description: formData.description })
+    //             .eq('assignment_id', editingAssignment.assignment_id);
+
+    //         if (error1) {
+    //             alert('Failed to update assignment details.');
+    //             return;
+    //         }
+
+    //         // 2. Update deployment info (due date) only if step 1 worked
+    //         const { error: error2 } = await supabase
+    //             .from('assignment_deployments')
+    //             .update({ due_date: utcStringForDB })
+    //             .eq('deployment_id', editingAssignment.deployment_id);
+
+    //         if (error2) {
+    //             alert('Failed to update assignment due date.');
+    //             return;
+    //         }
+
+    //         // Only update local state after both Supabase calls succeeded
+    //         setAssignments((prev) =>
+    //             prev.map((a) =>
+    //                 a.deployment_id === editingAssignment.deployment_id
+    //                     ? { ...a, name: formData.name, description: formData.description, due_date: localDateObj }
+    //                     : a
+    //             )
+    //         );
+    //     }
+
+    //     // Close the form after submitting
+    //     setEditingAssignment(null);
+    // };
+
+
+
+
+
+    // ------Entry point for the form submission------
+    // Validates input, prepares date data, then delegates to the correct handler
     const handleFormSubmit = async () => {
 
         // Guard — don't submit if required fields are empty
+        // Same as a null check before calling a method in Java
         if (!formData.name || !formData.dueDate || !formData.dueTime) {
             alert('Please fill in the assignment name, due date, and due time.');
             return;
         }
 
-        // Convert local form inputs into a UTC ISO string for Supabase
+        // Combine the separate date and time strings into a single JS Date object
+        // e.g. '2025-12-01' + 'T' + '23:59' → new Date('2025-12-01T23:59')
         const localDateObj = new Date(`${formData.dueDate}T${formData.dueTime}`);
+
+        // Convert the local Date object to a UTC ISO string for Supabase
+        // Supabase expects UTC — toISOString() handles the timezone conversion
         const utcStringForDB = localDateObj.toISOString();
 
+        // Delegate to the appropriate handler based on whether we are creating or editing
+        // Similar to calling a different method based on a condition in Java
         if (editingAssignment === 'create') {
-
-            // 1. Insert into assignments, get back the new assignment_id
-            const { data: assignmentData, error: error1 } = await supabase
-                .from('assignments')
-                .insert({ name: formData.name, description: formData.description })
-                .select()
-                .single();
-
-            if (error1) {
-                alert('Failed to create assignment.');
-                return;
-            }
-
-            // 2. Insert into assignment_deployments using the returned assignment_id
-            const { data: deploymentData, error: error2 } = await supabase
-                .from('assignment_deployments')
-                .insert({
-                    assignment_id: assignmentData.assignment_id,
-                    course_id:     selectedCourse.course_id,
-                    due_date:      utcStringForDB,
-                    is_visible:    false,
-                })
-                .select()
-                .single();
-
-            if (error2) {
-                alert('Failed to deploy assignment.');
-                return;
-            }
-
-            // Only update local state after both inserts succeeded
-            setAssignments((prev) => [...prev, {
-                deployment_id: deploymentData.deployment_id,
-                assignment_id: assignmentData.assignment_id,
-                name:          formData.name,
-                description:   formData.description,
-                due_date:      localDateObj,
-                is_visible:    false,
-            }]);
-
+            await handleCreateAssignment(localDateObj, utcStringForDB);
         } else {
-
-            // --- EDIT LOGIC ---
-            // 1. Update core assignment info
-            const { error: error1 } = await supabase
-                .from('assignments')
-                .update({ name: formData.name, description: formData.description })
-                .eq('assignment_id', editingAssignment.assignment_id);
-
-            if (error1) {
-                alert('Failed to update assignment details.');
-                return;
-            }
-
-            // 2. Update deployment info (due date) only if step 1 worked
-            const { error: error2 } = await supabase
-                .from('assignment_deployments')
-                .update({ due_date: utcStringForDB })
-                .eq('deployment_id', editingAssignment.deployment_id);
-
-            if (error2) {
-                alert('Failed to update assignment due date.');
-                return;
-            }
-
-            // Only update local state after both Supabase calls succeeded
-            setAssignments((prev) =>
-                prev.map((a) =>
-                    a.deployment_id === editingAssignment.deployment_id
-                        ? { ...a, name: formData.name, description: formData.description, due_date: localDateObj }
-                        : a
-                )
-            );
+            await handleEditAssignment(localDateObj, utcStringForDB);
         }
 
-        // Close the form after submitting
+        // Close the form after submitting regardless of create or edit
         setEditingAssignment(null);
     };
+
+
+    // Handles creating a brand new assignment
+    // Receives pre-built date objects from handleFormSubmit
+    const handleCreateAssignment = async (localDateObj, utcStringForDB) => {
+
+        // Step 1 — Insert the core assignment info into the assignments table
+        // .select().single() returns the newly created row so we can grab its assignment_id
+        const { data: assignmentData, error: error1 } = await supabase
+            .from('assignments')
+            .insert({ name: formData.name, description: formData.description })
+            .select()
+            .single();
+
+        // If step 1 failed, stop here — no point deploying an assignment that doesn't exist
+        if (error1) {
+            alert('Failed to create assignment.');
+            return;
+        }
+
+        // Step 2 — Deploy the assignment to this course using the assignment_id from step 1
+        // Hidden by default (is_visible: false) until the instructor manually reveals it
+        const { data: deploymentData, error: error2 } = await supabase
+            .from('assignment_deployments')
+            .insert({
+                assignment_id: assignmentData.assignment_id,
+                course_id:     selectedCourse.course_id,
+                due_date:      utcStringForDB,
+                is_visible:    false,
+            })
+            .select()
+            .single();
+
+        // If step 2 failed, stop here — assignment exists in DB but wasn't deployed
+        if (error2) {
+            alert('Failed to deploy assignment.');
+            return;
+        }
+
+        // Only update local state after both inserts succeeded
+        // Spreads the new assignment into the existing list — same as adding to an ArrayList in Java
+        setAssignments((prev) => [...prev, {
+            deployment_id: deploymentData.deployment_id,
+            assignment_id: assignmentData.assignment_id,
+            name:          formData.name,
+            description:   formData.description,
+            due_date:      localDateObj,
+            is_visible:    false,
+        }]);
+    };
+
+
+    // Handles updating an existing assignment
+    // Receives pre-built date objects from handleFormSubmit
+    const handleEditAssignment = async (localDateObj, utcStringForDB) => {
+
+        // Step 1 — Update the core assignment info in the assignments table
+        // Only name and description live here — due_date lives in assignment_deployments
+        const { error: error1 } = await supabase
+            .from('assignments')
+            .update({ name: formData.name, description: formData.description })
+            .eq('assignment_id', editingAssignment.assignment_id);
+
+        // If step 1 failed, stop here — don't update the due date if the name/description failed
+        if (error1) {
+            alert('Failed to update assignment details.');
+            return;
+        }
+
+        // Step 2 — Update the due date in assignment_deployments
+        // Only runs if step 1 succeeded
+        const { error: error2 } = await supabase
+            .from('assignment_deployments')
+            .update({ due_date: utcStringForDB })
+            .eq('deployment_id', editingAssignment.deployment_id);
+
+        // If step 2 failed, stop here — name/description updated but due date did not
+        if (error2) {
+            alert('Failed to update assignment due date.');
+            return;
+        }
+
+        // Only update local state after both Supabase calls succeeded
+        // Maps over the list and replaces only the matching assignment — like updating one element in a Java list
+        setAssignments((prev) =>
+            prev.map((a) =>
+                a.deployment_id === editingAssignment.deployment_id
+                    ? { ...a, name: formData.name, description: formData.description, due_date: localDateObj }
+                    : a
+            )
+        );
+    };
+
+
+
+
 
     // Flips the visible property of an assignment when the badge is clicked
     // true → false (hides from students)
