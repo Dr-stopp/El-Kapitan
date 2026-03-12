@@ -7,11 +7,11 @@ import { formatDueDate } from '../../utils.js';
 
 export default function InstructorDashboard({ user }) {
 
-    // Stores the list of courses this instructor teaches
+    // Starts empty, gets filled when Supabase returns data
     // Starts empty, gets filled when mockDB returns data
     const [courses, setCourses] = useState([]);
 
-    // True while we're waiting for data from mockDB
+    // True while we're waiting for data from Supabase
     // Shows "Loading..." instead of empty screen
     const [loading, setLoading] = useState(true);
 
@@ -23,9 +23,7 @@ export default function InstructorDashboard({ user }) {
     const [assignments, setAssignments] = useState([]);
     const [assignmentsLoading, setAssignmentsLoading] = useState(false);
 
-    // null = no form open
-    // 'create' = creating new assignment
-    // assignment object = editing existing assignment
+    // Controls the View State: null (list), 'create' (new form), or assignment object (edit form).
     const [editingAssignment, setEditingAssignment] = useState(null);
 
     // Stores the current values of the form fields
@@ -37,12 +35,12 @@ export default function InstructorDashboard({ user }) {
 
 
     // Runs once when the component first appears on screen
-    // Like a constructor in Java - do setup here
+    // Runs after the component mounts to the screen - do initial data fetching here
     useEffect(() => {
 
         // Fetch all courses this instructor teaches
         // Query instructor_courses for all courses this instructor teaches
-        // follows foreign key from instructor_courses → courses to get course name
+        // Performs a join with the 'courses' table using the foreign key to retrieve course names.
         supabase
         .from('instructor_courses')
         .select('course_id, courses(course_name)')
@@ -73,13 +71,14 @@ export default function InstructorDashboard({ user }) {
 
     // Runs whenever selectedCourse changes — fetches assignments for that course
     useEffect(() => {
+
         if (!selectedCourse) return;
 
         setAssignmentsLoading(true);
 
         // Query assignment_deployments for all assignments in this course
         // instructor sees ALL assignments regardless of is_visible
-        // follows foreign key to grab name and description from assignments table
+        // Joins with the 'assignments' table to aggregate metadata with deployment details.
         supabase
         .from('assignment_deployments')
         .select('deployment_id, assignment_id, due_date, is_visible, assignments(name, description)')
@@ -94,14 +93,19 @@ export default function InstructorDashboard({ user }) {
             // data comes back as:
             // [{ deployment_id: 1, assignment_id: 1, due_date: '...', is_visible: true, assignments: { name: '...', description: '...' } }]
             // flatten into same shape the rest of the component expects
-            const assignments = data.map(row => ({
-            deployment_id: row.deployment_id,
-            assignment_id: row.assignment_id,
-            due_date:      row.due_date,
-            is_visible:    row.is_visible,
-            name:          row.assignments.name,
-            description:   row.assignments.description,
-            }));
+            const assignments = data.map(row => {
+                // Create a real JS Date object immediately
+                const localDateObj = new Date(row.due_date); 
+                
+                return {
+                    deployment_id: row.deployment_id,
+                    assignment_id: row.assignment_id,
+                    due_date: localDateObj, // Store the OBJECT, not the string
+                    is_visible: row.is_visible,
+                    name: row.assignments.name,
+                    description: row.assignments.description,
+                };
+            });
 
             setAssignments(assignments);
             setAssignmentsLoading(false);
@@ -113,17 +117,26 @@ export default function InstructorDashboard({ user }) {
     // If editing — pre-fill the form with the assignment's current values
     // If creating — clear all fields
     useEffect(() => {
-        if (editingAssignment === 'create' || editingAssignment === null) {
-            // Clear all form fields for new assignment or when form is closed
-            setFormName('');
-            setFormDescription('');
-            setFormDueDate('');
-            setFormDueTime('');
+
+        if (editingAssignment && editingAssignment !== 'create') {
+            // No more .split('T') or manual string manipulation!
+            setFormName(editingAssignment.name);
+            setFormDescription(editingAssignment.description);
+            
+            // Use the object we cleaned earlier
+            setFormDueDate(editingAssignment.due_date.toLocaleDateString('en-CA'));
+            setFormDueTime(editingAssignment.due_date.toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+
+            }));
+
         } else {
+
             // Pre-fill form with existing assignment data
             setFormName(editingAssignment.name);
             setFormDescription(editingAssignment.description);
-            // due_date is stored as '2026-03-10T23:59:00Z'
+            // Expected format: ISO 8601 string (e.g., 'YYYY-MM-DDTHH:MM:SSZ')
             // split on 'T' to separate the date and time parts
             const [date, time] = editingAssignment.due_date.split('T');
             setFormDueDate(date);
@@ -133,7 +146,7 @@ export default function InstructorDashboard({ user }) {
 
 
     // Handles both create and edit form submission
-    // If editingAssignment is 'create' — adds a new assignment to mockDB
+    // If editingAssignment is 'create' — adds a new assignment to Supabase
     // If editingAssignment is an object — updates the existing assignment
     const handleFormSubmit = async () => {
 
@@ -143,8 +156,9 @@ export default function InstructorDashboard({ user }) {
             return;
         }
 
-        // Combine date and time back into one string to match the stored format
-        const due_date = `${formDueDate}T${formDueTime}:00Z`;
+        // 2. Prepare Data: Convert local form inputs into a UTC ISO string for Supabase
+        const localDateObj = new Date(`${formDueDate}T${formDueTime}`);
+        const utcStringForDB = localDateObj.toISOString();
 
         if (editingAssignment === 'create') {
 
@@ -166,7 +180,7 @@ export default function InstructorDashboard({ user }) {
                 .insert({
                     assignment_id: assignmentData.assignment_id,
                     course_id: selectedCourse.course_id,
-                    due_date: due_date,
+                    due_date: utcStringForDB,
                     is_visible: false,
                 })
                 .select()
@@ -183,31 +197,25 @@ export default function InstructorDashboard({ user }) {
                 assignment_id: assignmentData.assignment_id,
                 name: formName,
                 description: formDescription,
-                due_date: due_date,
+                due_date: localDateObj,
                 is_visible: false,
             }]);
 
         } else {
 
-            // Update name + description in the assignments table
+            // --- EDIT LOGIC ---
             const { error: error1 } = await supabase
                 .from('assignments')
                 .update({ name: formName, description: formDescription })
                 .eq('assignment_id', editingAssignment.assignment_id);
 
-            if (error1) {
-                alert('Failed to update assignment.');
-                return;
-            }
-
-            // Update due_date in the assignment_deployments table
             const { error: error2 } = await supabase
                 .from('assignment_deployments')
-                .update({ due_date: due_date })
+                .update({ due_date: utcStringForDB })
                 .eq('deployment_id', editingAssignment.deployment_id);
 
-            if (error2) {
-                alert('Failed to update due date.');
+            if (error1 || error2) {
+                alert('Failed to update assignment.');
                 return;
             }
 
@@ -215,7 +223,7 @@ export default function InstructorDashboard({ user }) {
             setAssignments((prev) =>
                 prev.map((a) =>
                     a.deployment_id === editingAssignment.deployment_id
-                        ? { ...a, name: formName, description: formDescription, due_date: due_date }
+                        ? { ...a, name: formName, description: formDescription, due_date: localDateObj }
                         : a
                 )
             );
@@ -363,7 +371,7 @@ export default function InstructorDashboard({ user }) {
                     + New Assignment
                     </button>
 
-                    {/* Show loading text while waiting for mockDB */}
+                    {/* Show loading text while waiting for Supabase */}
                     {assignmentsLoading ? (
                     <p>Loading...</p>
                     ) : (
