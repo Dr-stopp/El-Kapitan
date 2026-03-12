@@ -288,7 +288,57 @@ export default function InstructorDashboard({ user }) {
 
     return (
         
+        
         <div className="dashboard">
+
+
+            {/* Breadcrumbs for navigation */}
+            {/* ── Breadcrumb ── */}
+            {/* Shows the current navigation path: Courses → Course Name → Form */}
+            <div className="breadcrumb">
+
+                {/* Level 1 — always visible */}
+                {/* If a course is selected, this becomes a clickable link back to course list */}
+                {/* Clicking it resets both selectedCourse and editingAssignment */}
+                <span
+                    className={!selectedCourse ? 'breadcrumb-current' : 'breadcrumb-link'}
+                    onClick={() => {
+                    setSelectedCourse(null);
+                    setEditingAssignment(null);
+                    }}
+                >
+                    Courses
+                </span>
+
+                {/* Level 2 — only visible when a course is selected */}
+                {/* If the form is open, this becomes a clickable link back to assignment list */}
+                {/* Clicking it closes the form without losing the selected course */}
+                {selectedCourse && (
+                    <>
+                    <span className="breadcrumb-separator">→</span>
+                    <span
+                        className={!editingAssignment ? 'breadcrumb-current' : 'breadcrumb-link'}
+                        onClick={() => setEditingAssignment(null)}
+                    >
+                        {selectedCourse.course_name}
+                    </span>
+                    </>
+                )}
+
+                {/* Level 3 — only visible when the create or edit form is open */}
+                {/* Shows 'New Assignment' for create, 'Edit Assignment' for edit */}
+                {editingAssignment && (
+                    <>
+                    <span className="breadcrumb-separator">→</span>
+                    <span className="breadcrumb-current">
+                        {editingAssignment === 'create' ? 'New Assignment' : 'Edit Assignment'}
+                    </span>
+                    </>
+                )}
+
+            </div>
+
+
 
             {/* ── Course list view — shown by default ── */}
             {/* Renders when no course has been selected yet */}
