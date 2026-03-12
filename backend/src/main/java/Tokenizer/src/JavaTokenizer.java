@@ -6,6 +6,7 @@ package Tokenizer.src;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -13,15 +14,43 @@ import java.util.List;
 
  @author jakes*/
 public class JavaTokenizer {
-    public JavaTokenizer() throws IOException{
+    List<KGram> kGrams;
+    public JavaTokenizer(File f) throws IOException{
         MultiLangTokenizer multi = new MultiLangTokenizer();
-        List<Node> l = multi.tokenize("backend/testFiles/Test.c");
+        System.out.println(String.valueOf(f));
+        List<Node> l =multi.tokenize(String.valueOf(f));
+        kGrams = generateKGrams(l);
         for(Node n : l){
             System.out.println("Line Number: " + n.LineNumber + " Token: " + n.token.getText());
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        JavaTokenizer j = new JavaTokenizer();
+    public List<KGram> generateKGrams(List<Node> tokens) {
+
+        int k = 5;
+        List<KGram> result = new LinkedList<>();
+
+        if (tokens.size() < k) {
+            return result;
+        }
+
+        int numKgrams = tokens.size() - k + 1;
+
+        for (int i = 0; i < numKgrams; i++) {
+
+            StringBuilder gram = new StringBuilder();
+            for (int j = 0; j < k; j++) {
+                gram.append(tokens.get(i + j).Identifier).append(" ");
+            }
+
+            int startLine = tokens.get(i).LineNumber;
+            int endLine = tokens.get(i + k - 1).LineNumber;
+
+            int hash = gram.toString().trim().hashCode();
+
+            result.add(new KGram(hash, startLine, endLine));
+        }
+
+        return result;
     }
 }
