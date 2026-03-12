@@ -1,0 +1,124 @@
+.app-wrapper, .dashboard-container {
+  min-height: 100vh;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-nav {
+  min-height: 68px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 18px;
+  box-sizing: border-box;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(8px);
+  background: rgba(16,43,58,0.35);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.top-nav .btn-theme {
+  position: static;
+}
+
+.main-content {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 2rem;
+}
+
+.stat-card {
+  background: rgba(255,255,255,0.06);
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+}
+
+
+/* ── Header ── */
+
+
+.header-logo {
+  width: 44px;
+  height: 44px;
+  color: rgba(255,255,255,0.92);
+}
+
+.header-brand-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header-brand {
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+}
+
+.header-subbrand {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.7);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing-greeting {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.72);
+}
+
+/* ── Header buttons ── */
+.btn-theme,
+.btn-logout {
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border-radius: 12px;
+  transition: opacity 0.15s, background 0.15s, transform 0.15s;
+}
+
+.btn-logout {
+  background: #2c6a86;
+  border-color: transparent;
+}
+
+.btn-theme:hover,
+.btn-logout:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.btn-theme:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.btn-logout:hover {
+  background: #245d76;
+}
