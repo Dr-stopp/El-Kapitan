@@ -1,5 +1,6 @@
 package server;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -14,16 +15,17 @@ public class SupabaseStorageService {
 
     // ==== Supabase config (REPLACE) ====
     private static final String SUPABASE_URL = "https://dtrzuwcjxvxueepzgjol.supabase.co";
-    private static final String API_KEY = "API_KEY";
-    private static final String BUCKET = "Bucket";
+    private static final String BUCKET = "Submissions";
 
     private final WebClient webClient;
+    private final String apiKey;
 
-    public SupabaseStorageService(WebClient.Builder builder) {
+    public SupabaseStorageService(WebClient.Builder builder, @Value("${my.api.key}") String apiKey) {
+        this.apiKey = apiKey;
         this.webClient = builder
                 .baseUrl(SUPABASE_URL)
-                .defaultHeader("Authorization", "Bearer " + API_KEY)
-                .defaultHeader("apikey", API_KEY)
+                .defaultHeader("Authorization", "Bearer " + this.apiKey)
+                .defaultHeader("apikey", this.apiKey)
                 .build();
     }
 

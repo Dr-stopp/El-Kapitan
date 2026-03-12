@@ -24,7 +24,6 @@ public class MultiLangTokenizer {
                 System.out.println(line);
                 line = reader.readLine();
             }
-            tokenize("backend/testFiles/Test.java");
         }
          
     }
@@ -63,12 +62,6 @@ public class MultiLangTokenizer {
         if(ignore ==0){
             Node n = new Node(line,token,tokenName);
             tokenList.add(n);
-            System.out.println(
-            "Line " + line +
-            ", Column " + column +
-            " -> " + tokenName +
-            " : " + token.getText()
-             );
         } 
         
     }

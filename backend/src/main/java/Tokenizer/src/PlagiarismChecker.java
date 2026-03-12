@@ -11,12 +11,14 @@ import java.util.Set;
 
  @author jakes*/
 
-public class PlagirismChecker {
-    public PlagirismChecker(File f1, File f2) throws IOException {
+public class PlagiarismChecker {
+    List<KGram> firstkGrams;
+    List<KGram> secondkGrams;
+    public PlagiarismChecker(File f1, File f2) throws IOException {
         JavaTokenizer tokenizer1 = new JavaTokenizer(f1);
         JavaTokenizer tokenizer2 = new JavaTokenizer(f2);
-        List<KGram> firstkGrams = tokenizer1.kGrams;
-        List<KGram> secondkGrams = tokenizer2.kGrams;
+        firstkGrams = tokenizer1.kGrams;
+        secondkGrams = tokenizer2.kGrams;
         System.out.println("Files are: " + compareKGrams(firstkGrams,secondkGrams)*100 + "% similar.");
     }
 
@@ -48,9 +50,5 @@ public class PlagirismChecker {
         int minSize = Math.min(hashes1.size(), hashes2.size());
 
         return (double) matches / minSize;
-    }
-
-    public static void main(String[] args) throws IOException {
-        PlagirismChecker j = new PlagirismChecker(new File("backend/testFiles/Test.java"),new File("backend/testFiles/Test.java"));
     }
 }

@@ -20,9 +20,6 @@ public class JavaTokenizer {
         System.out.println(String.valueOf(f));
         List<Node> l =multi.tokenize(String.valueOf(f));
         kGrams = generateKGrams(l);
-        for(Node n : l){
-            System.out.println("Line Number: " + n.LineNumber + " Token: " + n.token.getText());
-        }
     }
 
     public List<KGram> generateKGrams(List<Node> tokens) {

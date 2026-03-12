@@ -20,21 +20,24 @@ public class SubmitController {
 
     @PostMapping(path = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> submit(
-            @RequestPart("file") MultipartFile file,
-            @RequestPart("student") long student,
-            @RequestPart("assignment") long assignment,
-            @RequestPart("course") String course
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("student") long student,
+            @RequestParam("assignment") long assignment,
+            @RequestParam("course") String course
     ) {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body("No file uploaded");
         }
 
         try {
+            System.out.println("Received");
             String objectPath = storageService.upload(file, student, assignment, course);
+            System.out.println("Uploaded");
             long submissionID = dbHandler.generateSubmissionID();
+            System.out.println("ID Generated");
             resultsManager.generateResults(file, course, assignment);
             dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
-
+            System.out.println("Complete");
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");
         } catch (Exception e) {
             return ResponseEntity.status(502).body("Upload failed: " + e.getMessage());

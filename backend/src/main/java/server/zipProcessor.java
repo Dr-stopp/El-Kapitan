@@ -1,5 +1,6 @@
 package server;
 
+import Tokenizer.src.PlagiarismChecker;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
@@ -9,6 +10,7 @@ import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.springframework.mock.web.MockMultipartFile;
+import java.util.List;
 
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -20,7 +22,7 @@ public class zipProcessor {
      * Reads a ZIP from MultipartFile, concatenates files with the same extension as
      * the first file found, and writes output to ./temp/combined.<ext>
      */
-    public static Path concatZipFromMultipartToTemp(MultipartFile zipFile) throws IOException {
+    public static Path concatZipFromMultipartToTemp(MultipartFile zipFile, String name) throws IOException {
         Path tempDir = Paths.get("temp");
         Files.createDirectories(tempDir);
 
@@ -34,7 +36,7 @@ public class zipProcessor {
             throw new IOException("No valid files with extension found in zip.");
         }
 
-        Path outputFile = tempDir.resolve("combined." + targetExt);
+        Path outputFile = tempDir.resolve(name + "." + targetExt);
 
         // Second pass: concatenate matching files
         try (
@@ -53,7 +55,7 @@ public class zipProcessor {
                 if (!entry.isDirectory()) {
                     String ext = getExtension(entry.getName());
                     if (targetExt.equalsIgnoreCase(ext)) {
-                        writer.write("===== BEGIN FILE: " + entry.getName() + " =====");
+                        writer.write("//===== BEGIN FILE: " + entry.getName() + " =====");
                         writer.newLine();
 
                         Reader reader = new InputStreamReader(zis, StandardCharsets.UTF_8);
@@ -63,7 +65,7 @@ public class zipProcessor {
                         }
 
                         writer.newLine();
-                        writer.write("===== END FILE: " + entry.getName() + " =====");
+                        writer.write("//===== END FILE: " + entry.getName() + " =====");
                         writer.newLine();
                         writer.newLine();
                     }
@@ -97,26 +99,6 @@ public class zipProcessor {
     }
 
     public static void main(String[] args) throws IOException {
-        Path path1 = Path.of("backend/testFiles/zipTest1.zip");
-        Path path2 = Path.of("backend/testFiles/zipTest2.zip");
-        MultipartFile f1;
-        MultipartFile f2;
-        try (InputStream is1 = Files.newInputStream(path1); InputStream is2 = Files.newInputStream(path2)) {
-            f1 = new MockMultipartFile(
-                    "file",                      // form field name
-                    path1.getFileName().toString(), // original filename
-                    "application/zip",           // content type
-                    is1
-            );
-            f2 = new MockMultipartFile(
-                    "file",                      // form field name
-                    path2.getFileName().toString(), // original filename
-                    "application/zip",           // content type
-                    is2
-            );
-        }
-        Path p1 = concatZipFromMultipartToTemp(f1);
-        Path p2 = concatZipFromMultipartToTemp(f2);
 
     }
 }
