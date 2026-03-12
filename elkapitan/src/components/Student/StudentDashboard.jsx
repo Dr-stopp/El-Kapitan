@@ -50,7 +50,7 @@ export default function StudentDashboard({ user }) {
       const filePath = `${user.id}/${selectedAssignment.deployment_id}/${selectedFile.name}`;
 
       // Upload to Supabase Storage bucket called 'submissions'
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('submissions')
         .upload(filePath, selectedFile, { upsert: true });
 
@@ -95,46 +95,64 @@ export default function StudentDashboard({ user }) {
             setLoading(false);
           });
 
-    }, []); // runs once on mount
+    }, [user.id]); // runs once on mount
 
 
 
 
+    // Runs whenever selectedCourse changes — fetches assignments for that course
     useEffect(() => {
 
-      if (!selectedCourse) return; // guard — do nothing if no course selected
-        
-        setAssignmentsLoading(true);
+        if (!selectedCourse) return; // guard — do nothing if no course selected
 
-        // Query assignment_deployments for all visible assignments in this course
-        // select follows foreign keys to grab assignment name and description too
-        supabase
-          .from('assignment_deployments')
-          .select('deployment_id, due_date, is_visible, assignments(name, description)')
-          .eq('course_id', selectedCourse.course_id)  // WHERE course_id = selectedCourse.course_id
-          .eq('is_visible', true)                      // AND is_visible = true
-          .then(({ data, error }) => {
+        // Wrapped in an async function because useEffect itself can't be async
+        const fetchAssignments = async () => {
+
+            setAssignmentsLoading(true);
+
+            // Query assignment_deployments for all visible assignments in this course
+            // select follows foreign keys to grab assignment name and description too
+            const { data, error } = await supabase
+                .from('assignment_deployments')
+                .select('deployment_id, due_date, is_visible, assignments(name, description)')
+                .eq('course_id', selectedCourse.course_id)  // WHERE course_id = selectedCourse.course_id
+                .eq('is_visible', true);                     // AND is_visible = true
 
             if (error) {
-              console.error(error);
-              return;
+                console.error(error);
+                setAssignmentsLoading(false);
+                return;
             }
 
-            // data comes back as:
-            // [{ deployment_id: 1, due_date: '...', is_visible: true, assignments: { name: '...', description: '...' } }]
-            // flatten it into the same shape the rest of the component expects
-            const assignments = data.map(row => ({
-              deployment_id: row.deployment_id,
-              due_date:      row.due_date,
-              is_visible:    row.is_visible,
-              name:          row.assignments.name,
-              description:   row.assignments.description,
-            }));
+            // For each assignment, check Supabase Storage to see if the student
+            // already submitted a file — folder exists and has at least one file
+            // Promise.all runs all checks in parallel instead of one by one
+            const assignmentsWithStatus = await Promise.all(
+                data.map(async (row) => {
 
-            setAssignments(assignments);
+                    // Check if a file exists at submissions/userId/deploymentId/
+                    const { data: files } = await supabase.storage
+                        .from('submissions')
+                        .list(`${user.id}/${row.deployment_id}`);
+
+                    return {
+                        deployment_id: row.deployment_id,
+                        due_date:      row.due_date,
+                        is_visible:    row.is_visible,
+                        name:          row.assignments.name,
+                        description:   row.assignments.description,
+                        submitted:     files && files.length > 0, // true if file exists
+                    };
+                })
+            );
+
+            setAssignments(assignmentsWithStatus);
             setAssignmentsLoading(false);
-          });
-    }, [selectedCourse]); // runs whenever selectedCourse changes
+        };
+
+        fetchAssignments(); // call the async function
+
+    }, [selectedCourse, user.id]); // runs whenever selectedCourse changes
 
 
     return (
