@@ -18,7 +18,7 @@ public class DBHandler {
     }
 
     public long generateSubmissionID() {
-        String sql = "SELECT nextval('submission_seq')";
+        String sql = "SELECT nextval('submissions_seq')";
         return jdbc.queryForObject(sql, Long.class);
     }
 

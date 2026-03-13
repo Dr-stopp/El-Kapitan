@@ -24,7 +24,6 @@ public class MultiLangTokenizer {
                 System.out.println(line);
                 line = reader.readLine();
             }
-            tokenize("testFiles/Test.java");
         }
 
     }
@@ -54,24 +53,18 @@ public class MultiLangTokenizer {
 
                 String tokenName = lexer.getVocabulary().getSymbolicName(token.getType());
 
-                int line = token.getLine();
-                int column = token.getCharPositionInLine();
-                int ignore =0;
-                for(String s : ignoredTokens){
-                    if (tokenName.equals(s)){ ignore =1;break;}
-                }
-                if(ignore ==0){
-                    Node n = new Node(line,token,tokenName);
-                    tokenList.add(n);
-                    System.out.println(
-                            "Line " + line +
-                                    ", Column " + column +
-                                    " -> " + tokenName +
-                                    " : " + token.getText()
-                    );
-                }
-
-            }
+        int line = token.getLine();
+        int column = token.getCharPositionInLine();
+        int ignore =0;
+        for(String s : ignoredTokens){
+            if (tokenName.equals(s)){ ignore =1;break;}
+        }
+        if(ignore ==0){
+            Node n = new Node(line,token,tokenName);
+            tokenList.add(n);
+        } 
+        
+    }
         }
         return tokenList;
     }
