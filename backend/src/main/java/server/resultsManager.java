@@ -30,10 +30,19 @@ public class resultsManager {
         Path p1 = zipProcessor.concatZipFromMultipartToTemp(file, "baseFile");;
         File f1 = p1.toFile();
         log.info("Running comparison on " + files.size() + " files.");
+        int i = 0;
         for (File f : files) {
-            new PlagiarismChecker(f1, f);
+            try {
+                log.info("Starting checker on file index={} name={}", i, f.getName());
+                new PlagiarismChecker(f1, f);
+                log.info("Checker completed on file index={}", i);
+            } catch (Exception e) {
+                log.error("Checker failed on file index={} name={}", i, f.getName(), e);
+                throw e; // keep failing fast so submit returns error
+            }
+            i++;
         }
-
+        log.info("All comparisons complete");
         Path temp = Path.of("temp");
         try (var walk = Files.walk(temp)) {
             walk.sorted(Comparator.reverseOrder())
@@ -45,6 +54,7 @@ public class resultsManager {
                         }
                     });
         }
+        log.info("Temp files deleted");
     }
 
     private List<File> loadFiles(String course, long assignment, String bucket) throws IOException {
