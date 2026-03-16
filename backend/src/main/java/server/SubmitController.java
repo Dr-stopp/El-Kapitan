@@ -1,5 +1,6 @@
 package server;
 
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,10 +13,12 @@ public class SubmitController {
 
     private final SupabaseStorageService storageService;
     private final DBHandler dbHandler;
+    private final resultsManager results;
 
     public SubmitController(SupabaseStorageService storageService, DBHandler dbHandler) {
         this.storageService = storageService;
         this.dbHandler = dbHandler;
+        this.results = new resultsManager(storageService);
     }
 
     @PostMapping(path = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -30,14 +33,14 @@ public class SubmitController {
         }
 
         try {
-            System.out.println("Received");
-            String objectPath = storageService.upload(file, student, assignment, course);
-            System.out.println("Uploaded");
+            LoggerFactory.getLogger("Received");
+            String objectPath = storageService.upload(file, student, assignment, course, "Submissions");
+            LoggerFactory.getLogger("Uploaded");
             long submissionID = dbHandler.generateSubmissionID();
-            System.out.println("ID Generated");
-            resultsManager.generateResults(file, course, assignment);
+            LoggerFactory.getLogger("ID Generated");
+            results.generateResults(file, course, assignment);
             dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
-            System.out.println("Complete");
+            LoggerFactory.getLogger("Complete");
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");
         } catch (Exception e) {
             return ResponseEntity.status(502).body("Upload failed: " + e.getMessage());

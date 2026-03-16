@@ -1,5 +1,6 @@
 package server;
 
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +14,7 @@ public class DBHandler {
 
     public DBHandler(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        System.out.println("DBHandler initialized");
+        LoggerFactory.getLogger("DBHandler initialized");
 
     }
 

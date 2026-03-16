@@ -4,6 +4,8 @@
 
 package Tokenizer.src;
 
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
@@ -17,7 +19,7 @@ public class JavaTokenizer {
     List<KGram> kGrams;
     public JavaTokenizer(File f) throws IOException{
         MultiLangTokenizer multi = new MultiLangTokenizer();
-        System.out.println(String.valueOf(f));
+        LoggerFactory.getLogger(String.valueOf(f));
         List<Node> l =multi.tokenize(String.valueOf(f));
         kGrams = generateKGrams(l);
     }

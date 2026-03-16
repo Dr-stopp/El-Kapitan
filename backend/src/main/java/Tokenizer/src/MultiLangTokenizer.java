@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import org.antlr.v4.runtime.*;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -21,7 +22,6 @@ public class MultiLangTokenizer {
             String line = reader.readLine();
             while(line !=null){
                 ignoredTokens.add(line);
-                System.out.println(line);
                 line = reader.readLine();
             }
         }

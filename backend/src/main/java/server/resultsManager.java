@@ -1,6 +1,7 @@
 package server;
 
 import Tokenizer.src.PlagiarismChecker;
+import org.slf4j.LoggerFactory;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,37 +16,22 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class resultsManager {
-    public static void generateResults(MultipartFile file, String course, long assignment) throws IOException {
-        System.out.println("Generating Results:");
-        List<File> files = new LinkedList<>();
-        MultipartFile mpf1;
-        MultipartFile mpf2;
-        Path p1;
-        File f1;
-        p1 = zipProcessor.concatZipFromMultipartToTemp(file, "baseFile");
-        f1 = p1.toFile();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(Path.of("backend/testFiles"))) {
-            int i = 1;
-            for (Path path : stream) {
-                if (Files.isRegularFile(path)) {
-                    try (InputStream is = Files.newInputStream(path)) {
-                        MultipartFile mf = new MockMultipartFile(
-                                "file",
-                                path.getFileName().toString(),
-                                Files.probeContentType(path),
-                                is
-                        );
-                        Path tempPath = zipProcessor.concatZipFromMultipartToTemp(mf, "file" + i);
-                        files.add(tempPath.toFile());
-                    }
-                }
-                i++;
-            }
-        }
-        System.out.println("Running comparison on " + files.size() + " files.");
+    private final SupabaseStorageService storageService;
+    private final String BUCKET;
+    public resultsManager(SupabaseStorageService storageService) {
+        this.storageService = storageService;
+        BUCKET = "TestFiles";
+    }
+    public void generateResults(MultipartFile file, String course, long assignment) throws IOException {
+        LoggerFactory.getLogger("Generating Results:");
+        List<File> files = loadFiles(course, assignment, BUCKET);
+        Path p1 = zipProcessor.concatZipFromMultipartToTemp(file, "baseFile");;
+        File f1 = p1.toFile();
+        LoggerFactory.getLogger("Running comparison on " + files.size() + " files.");
         for (File f : files) {
             new PlagiarismChecker(f1, f);
         }
+
         Path temp = Path.of("temp");
         try (var walk = Files.walk(temp)) {
             walk.sorted(Comparator.reverseOrder())
@@ -59,4 +45,31 @@ public class resultsManager {
         }
     }
 
+    private List<File> loadFiles(String course, long assignment, String bucket) throws IOException {
+        List<File> files = new LinkedList<>();
+        //String prefix = course + "/" + assignment; // matches your upload path format
+
+        List<String> allPaths = storageService.listAllFiles(null, bucket);
+        int i = 1;
+
+        for (String objectPath : allPaths) {
+            // adjust this filter if your uploaded extension changes
+            if (!objectPath.toLowerCase().endsWith(".bin")) continue;
+
+            byte[] content = storageService.downloadFile(objectPath, bucket);
+
+            MultipartFile mf = new MockMultipartFile(
+                    "file",
+                    Path.of(objectPath).getFileName().toString(),
+                    "application/zip",
+                    content
+            );
+
+            Path tempPath = zipProcessor.concatZipFromMultipartToTemp(mf, "file" + i);
+            files.add(tempPath.toFile());
+            i++;
+        }
+
+        return files;
+    }
 }
