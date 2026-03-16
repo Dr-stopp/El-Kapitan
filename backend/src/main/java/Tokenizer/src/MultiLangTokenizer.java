@@ -18,13 +18,13 @@ public class MultiLangTokenizer {
     List<String> ignoredTokens = new LinkedList();
     
     public MultiLangTokenizer() throws FileNotFoundException, IOException{
-         try (BufferedReader reader = new BufferedReader(new FileReader("backend/src/Main/resources/Ignore.txt"))) {
-            String line = reader.readLine();
-            while(line !=null){
-                ignoredTokens.add(line);
-                line = reader.readLine();
-            }
-        }
+        //try (BufferedReader reader = new BufferedReader(new FileReader("backend/src/Main/resources/Ignore.txt"))) {
+        //   String line = reader.readLine();
+        //   while(line !=null){
+        //       ignoredTokens.add(line);
+        //       line = reader.readLine();
+        //   }
+        //
          
     }
 
