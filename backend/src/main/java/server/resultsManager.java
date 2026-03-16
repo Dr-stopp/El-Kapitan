@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
@@ -19,22 +20,25 @@ import java.util.List;
 public class resultsManager {
     private static final Logger log = LoggerFactory.getLogger(resultsManager.class);
     private final SupabaseStorageService storageService;
+    private final DBHandler dbHandler;
     private final String BUCKET;
-    public resultsManager(SupabaseStorageService storageService) {
+    public resultsManager(SupabaseStorageService storageService, DBHandler dbHandler) {
         this.storageService = storageService;
+        this.dbHandler = dbHandler;
         BUCKET = "TestFiles";
     }
-    public void generateResults(MultipartFile file, String course, long assignment) throws IOException {
+    public void generateResults(MultipartFile file, String course, long assignment, long submissionID) throws IOException {
         log.info("Generating Results:");
         List<File> files = loadFiles(course, assignment, BUCKET);
         Path p1 = zipProcessor.concatZipFromMultipartToTemp(file, "baseFile");;
         File f1 = p1.toFile();
         log.info("Running comparison on " + files.size() + " files.");
-        int i = 0;
+        int i = 1;
         for (File f : files) {
             try {
                 log.info("Starting checker on file index={} name={}", i, f.getName());
-                new PlagiarismChecker(f1, f);
+                PlagiarismChecker pc = new PlagiarismChecker(f1, f);
+                dbHandler.insertResult(submissionID, i, pc.index, OffsetDateTime.now(), i);
                 log.info("Checker completed on file index={}", i);
             } catch (Exception e) {
                 log.error("Checker failed on file index={} name={}", i, f.getName(), e);

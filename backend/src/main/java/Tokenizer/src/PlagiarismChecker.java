@@ -18,12 +18,14 @@ public class PlagiarismChecker {
     private static final Logger log = LoggerFactory.getLogger(PlagiarismChecker.class);
     List<KGram> firstkGrams;
     List<KGram> secondkGrams;
+    public long index;
     public PlagiarismChecker(File f1, File f2) throws IOException {
         JavaTokenizer tokenizer1 = new JavaTokenizer(f1);
         JavaTokenizer tokenizer2 = new JavaTokenizer(f2);
         firstkGrams = tokenizer1.kGrams;
         secondkGrams = tokenizer2.kGrams;
-        log.info("Files are: " + compareKGrams(firstkGrams,secondkGrams)*100 + "% similar.");
+        index = (long) (compareKGrams(firstkGrams,secondkGrams)*100);
+        log.info("Files are: " + index + "% similar.");
     }
 
     public double compareKGrams(List<KGram> file1, List<KGram> file2) {

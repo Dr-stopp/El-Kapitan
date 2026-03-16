@@ -4,6 +4,7 @@ import Tokenizer.src.PlagiarismChecker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +23,7 @@ public class SubmitController {
     public SubmitController(SupabaseStorageService storageService, DBHandler dbHandler) {
         this.storageService = storageService;
         this.dbHandler = dbHandler;
-        this.results = new resultsManager(storageService);
+        this.results = new resultsManager(storageService, dbHandler);
     }
 
     @PostMapping(path = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -45,11 +46,17 @@ public class SubmitController {
             long submissionID = dbHandler.generateSubmissionID();
             log.info("Generated submissionID={}", submissionID);
 
-            results.generateResults(file, course, assignment);
+            try {
+                dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
+            } catch (DataIntegrityViolationException dup) {
+                // duplicate submission row: ignore, but keep request successful
+                log.warn("Submission already exists for student={} assignment={}", student, assignment, dup);
+            }
+            log.info("DB insertSubmission ok id={}", submissionID);
+
+            results.generateResults(file, course, assignment, submissionID);
             log.info("Results generated");
 
-            dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
-            log.info("DB insertSubmission ok id={}", submissionID);
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");
         } catch (DataAccessException dae) {
             log.error("Database error during submit", dae);
