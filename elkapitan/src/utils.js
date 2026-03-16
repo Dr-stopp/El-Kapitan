@@ -1,26 +1,22 @@
 // utils.js
 // Shared helper functions used across the app
 
-// Formats an ISO date string into a readable date and time
-// Input:  '2026-03-10T23:59:00Z'
-// Output: 'March 10, 2026 11:59 PM'
-export const formatDueDate = (isoString) => {
+/**
+ * Formats a JavaScript Date object into a localized, readable string.
+ * Input:  JavaScript Date object
+ * Output: e.g., 'Mar. 10, 11:59 p.m.' (Format depends on 'en-CA' locale)
+ */
+export const formatDueDate = (dateStr) => {
 
-    // Convert the ISO string into a JavaScript Date object
-    const date = new Date(isoString);
-
-    // Format the date part — e.g. 'March 10, 2026'
-    const datePart = date.toLocaleDateString('en-US', {
-        year:  'numeric',
-        month: 'long',
-        day:   'numeric',
+    const dateObj = new Date(dateStr);
+    
+    // Safety check to ensure the input is a valid Date object
+    if (isNaN(dateObj)) return "Invalid Date";
+    return dateObj.toLocaleString('en-CA', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
     });
 
-    // Format the time part — e.g. '11:59 PM'
-    const timePart = date.toLocaleTimeString('en-US', {
-        hour:   '2-digit',
-        minute: '2-digit',
-    });
-
-    return `${datePart} ${timePart}`;
 };
