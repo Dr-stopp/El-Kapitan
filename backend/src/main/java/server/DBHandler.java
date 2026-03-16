@@ -31,6 +31,11 @@ public class DBHandler {
         return jdbc.queryForObject(sql, Long.class);
     }
 
+    public void clearResults() {
+        String sql = "DELETE FROM RESULTS";
+        jdbc.execute(sql);
+    }
+
     @Transactional
     public void insertCourse(long courseId, String courseName) {
         String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
