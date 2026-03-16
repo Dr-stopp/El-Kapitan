@@ -1,5 +1,6 @@
 package Tokenizer.src;
 
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
@@ -14,6 +15,7 @@ import java.util.Set;
  @author jakes*/
 
 public class PlagiarismChecker {
+    private static final Logger log = LoggerFactory.getLogger(PlagiarismChecker.class);
     List<KGram> firstkGrams;
     List<KGram> secondkGrams;
     public PlagiarismChecker(File f1, File f2) throws IOException {
@@ -21,7 +23,7 @@ public class PlagiarismChecker {
         JavaTokenizer tokenizer2 = new JavaTokenizer(f2);
         firstkGrams = tokenizer1.kGrams;
         secondkGrams = tokenizer2.kGrams;
-        LoggerFactory.getLogger("Files are: " + compareKGrams(firstkGrams,secondkGrams)*100 + "% similar.");
+        log.info("Files are: " + compareKGrams(firstkGrams,secondkGrams)*100 + "% similar.");
     }
 
     public double compareKGrams(List<KGram> file1, List<KGram> file2) {

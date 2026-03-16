@@ -1,5 +1,7 @@
 package server;
 
+import Tokenizer.src.PlagiarismChecker;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -11,10 +13,11 @@ import java.time.OffsetDateTime;
 public class DBHandler {
 
     private final JdbcTemplate jdbc;
+    private static final Logger log = LoggerFactory.getLogger(DBHandler.class);
 
     public DBHandler(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        LoggerFactory.getLogger("DBHandler initialized");
+        log.info("DBHandler initialized");
 
     }
 

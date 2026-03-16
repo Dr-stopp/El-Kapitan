@@ -1,5 +1,7 @@
 package server;
 
+import Tokenizer.src.PlagiarismChecker;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +16,7 @@ public class SubmitController {
     private final SupabaseStorageService storageService;
     private final DBHandler dbHandler;
     private final resultsManager results;
+    private static final Logger log = LoggerFactory.getLogger(SubmitController.class);
 
     public SubmitController(SupabaseStorageService storageService, DBHandler dbHandler) {
         this.storageService = storageService;
@@ -33,14 +36,14 @@ public class SubmitController {
         }
 
         try {
-            LoggerFactory.getLogger("Received");
+            log.info("Received");
             String objectPath = storageService.upload(file, student, assignment, course, "Submissions");
-            LoggerFactory.getLogger("Uploaded");
+            log.info("Uploaded");
             long submissionID = dbHandler.generateSubmissionID();
-            LoggerFactory.getLogger("ID Generated");
+            log.info("ID Generated");
             results.generateResults(file, course, assignment);
             dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
-            LoggerFactory.getLogger("Complete");
+            log.info("Complete");
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");
         } catch (Exception e) {
             return ResponseEntity.status(502).body("Upload failed: " + e.getMessage());

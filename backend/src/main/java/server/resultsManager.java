@@ -1,6 +1,7 @@
 package server;
 
 import Tokenizer.src.PlagiarismChecker;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,6 +17,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class resultsManager {
+    private static final Logger log = LoggerFactory.getLogger(resultsManager.class);
     private final SupabaseStorageService storageService;
     private final String BUCKET;
     public resultsManager(SupabaseStorageService storageService) {
@@ -23,11 +25,11 @@ public class resultsManager {
         BUCKET = "TestFiles";
     }
     public void generateResults(MultipartFile file, String course, long assignment) throws IOException {
-        LoggerFactory.getLogger("Generating Results:");
+        log.info("Generating Results:");
         List<File> files = loadFiles(course, assignment, BUCKET);
         Path p1 = zipProcessor.concatZipFromMultipartToTemp(file, "baseFile");;
         File f1 = p1.toFile();
-        LoggerFactory.getLogger("Running comparison on " + files.size() + " files.");
+        log.info("Running comparison on " + files.size() + " files.");
         for (File f : files) {
             new PlagiarismChecker(f1, f);
         }

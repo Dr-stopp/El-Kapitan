@@ -4,6 +4,7 @@
 
 package Tokenizer.src;
 
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
@@ -17,9 +18,10 @@ import java.util.List;
  @author jakes*/
 public class JavaTokenizer {
     List<KGram> kGrams;
+    private static final Logger log = LoggerFactory.getLogger(JavaTokenizer.class);
     public JavaTokenizer(File f) throws IOException{
         MultiLangTokenizer multi = new MultiLangTokenizer();
-        LoggerFactory.getLogger(String.valueOf(f));
+        log.info(String.valueOf(f));
         List<Node> l =multi.tokenize(String.valueOf(f));
         kGrams = generateKGrams(l);
     }
