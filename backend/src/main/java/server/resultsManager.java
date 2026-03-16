@@ -38,7 +38,7 @@ public class resultsManager {
             try {
                 log.info("Starting checker on file index={} name={}", i, f.getName());
                 PlagiarismChecker pc = new PlagiarismChecker(f1, f);
-                dbHandler.insertResult(submissionID, i, pc.index, OffsetDateTime.now(), i);
+                dbHandler.insertResult(submissionID, i, pc.index, OffsetDateTime.now(), dbHandler.generateResultID());
                 log.info("Checker completed on file index={}", i);
             } catch (Exception e) {
                 log.error("Checker failed on file index={} name={}", i, f.getName(), e);

@@ -26,6 +26,11 @@ public class DBHandler {
         return jdbc.queryForObject(sql, Long.class);
     }
 
+    public long generateResultID() {
+        String sql = "SELECT nextval('results_seq')";
+        return jdbc.queryForObject(sql, Long.class);
+    }
+
     @Transactional
     public void insertCourse(long courseId, String courseName) {
         String sql = "INSERT INTO public.\"Courses\" (course_id, course_name) VALUES (?, ?)";
