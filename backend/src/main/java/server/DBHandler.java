@@ -32,7 +32,7 @@ public class DBHandler {
     }
 
     public long getSubmissionID(String ObjectPath) {
-        String sql = "SELECT * from submissions where folder_path ='" + ObjectPath + "'";
+        String sql = "SELECT submission_id from submissions where folder_path ='" + ObjectPath + "'";
         return jdbc.queryForObject(sql, Long.class);
     }
 
