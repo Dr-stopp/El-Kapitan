@@ -34,11 +34,11 @@ public class resultsManager {
         File f1 = p1.toFile();
         log.info("Running comparison on " + files.size() + " files.");
         int i = 1;
+        dbHandler.clearResults();
         for (File f : files) {
             try {
                 log.info("Starting checker on file index={} name={}", i, f.getName());
                 PlagiarismChecker pc = new PlagiarismChecker(f1, f);
-                dbHandler.clearResults();
                 dbHandler.insertResult(submissionID, i, pc.index, OffsetDateTime.now(), dbHandler.generateResultID());
                 log.info("Checker completed on file index={}", i);
             } catch (Exception e) {
