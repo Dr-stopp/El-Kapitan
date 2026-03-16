@@ -31,8 +31,8 @@ public class DBHandler {
         return jdbc.queryForObject(sql, Long.class);
     }
 
-    public void clearResults() {
-        String sql = "DELETE FROM RESULTS";
+    public void clearResults(long submission_id) {
+        String sql = "DELETE FROM RESULTS WHERE SUBMISSION_1 =" + submission_id;
         jdbc.execute(sql);
     }
 

@@ -34,7 +34,7 @@ public class resultsManager {
         File f1 = p1.toFile();
         log.info("Running comparison on " + files.size() + " files.");
         int i = 1;
-        dbHandler.clearResults();
+
         for (File f : files) {
             try {
                 log.info("Starting checker on file index={} name={}", i, f.getName());
