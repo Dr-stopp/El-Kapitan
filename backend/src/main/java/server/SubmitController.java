@@ -50,8 +50,8 @@ public class SubmitController {
                 dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
             } catch (DataIntegrityViolationException dup) {
                 // duplicate submission row: ignore, but keep request successful
-                long foundSubmission_ID = dbHandler.getSubmissionID(objectPath);
-                dbHandler.clearResults(foundSubmission_ID);
+                submissionID = dbHandler.getSubmissionID(objectPath);
+                dbHandler.clearResults(submissionID);
                 log.warn("Submission already exists for student={} assignment={}", student, assignment, dup);
             }
             log.info("DB insertSubmission ok id={}", submissionID);
