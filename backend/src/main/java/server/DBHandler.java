@@ -31,6 +31,11 @@ public class DBHandler {
         return jdbc.queryForObject(sql, Long.class);
     }
 
+    public long getSubmissionID(String ObjectPath) {
+        String sql = "SELECT * from submissions where folder_path =" + ObjectPath;
+        return jdbc.queryForObject(sql, Long.class);
+    }
+
     public void clearResults(long submission_id) {
         String sql = "DELETE FROM RESULTS WHERE SUBMISSION_1 =" + submission_id;
         jdbc.execute(sql);
