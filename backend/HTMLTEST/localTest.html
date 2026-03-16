@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<body>
+<input type="text" id="student" placeholder="Student ID">
+<br>
+<input type="text" id="assignment" placeholder="Assignment ID">
+<br>
+<input type="text" id="course" placeholder="Course">
+<br>
+<input type="file" id="submission">
+<br>
+<button onclick="send()">Submit</button>
+
+<script>
+    async function send() {
+      const file = document.getElementById("submission").files[0];
+      const student = document.getElementById("student").value.trim();
+      const assignment = document.getElementById("assignment").value.trim();
+      const course = document.getElementById("course").value.trim();
+
+      if (!file) return console.log("No file selected");
+      if (!student || !assignment || !course) {
+        return console.log("Fill student, assignment, and course");
+      }
+
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      formData.append("student", student);
+      formData.append("assignment", assignment);
+      formData.append("course", course);
+
+      const res = await fetch("http://localhost:8080/submit", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log(res.status, await res.text());
+    }
+  </script>
+</body>
+</html>

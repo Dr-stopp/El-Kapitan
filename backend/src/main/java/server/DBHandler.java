@@ -1,5 +1,8 @@
 package server;
 
+import Tokenizer.src.PlagiarismChecker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,16 +13,32 @@ import java.time.OffsetDateTime;
 public class DBHandler {
 
     private final JdbcTemplate jdbc;
+    private static final Logger log = LoggerFactory.getLogger(DBHandler.class);
 
     public DBHandler(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        System.out.println("DBHandler initialized");
+        log.info("DBHandler initialized");
 
     }
 
     public long generateSubmissionID() {
         String sql = "SELECT nextval('submissions_seq')";
         return jdbc.queryForObject(sql, Long.class);
+    }
+
+    public long generateResultID() {
+        String sql = "SELECT nextval('results_seq')";
+        return jdbc.queryForObject(sql, Long.class);
+    }
+
+    public long getSubmissionID(String ObjectPath) {
+        String sql = "SELECT submission_id from submissions where folder_path ='" + ObjectPath + "'";
+        return jdbc.queryForObject(sql, Long.class);
+    }
+
+    public void clearResults(long submission_id) {
+        String sql = "DELETE FROM RESULTS WHERE SUBMISSION_1 =" + submission_id;
+        jdbc.execute(sql);
     }
 
     @Transactional
