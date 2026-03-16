@@ -56,7 +56,7 @@ public class resultsManager {
 
         for (String objectPath : allPaths) {
             // adjust this filter if your uploaded extension changes
-            if (!objectPath.toLowerCase().endsWith(".bin")) continue;
+            if (!objectPath.toLowerCase().endsWith(".zip")) continue;
 
             byte[] content = storageService.downloadFile(objectPath, bucket);
 

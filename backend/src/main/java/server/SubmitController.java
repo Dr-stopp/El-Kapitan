@@ -3,6 +3,7 @@ package server;
 import Tokenizer.src.PlagiarismChecker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -36,17 +37,28 @@ public class SubmitController {
         }
 
         try {
-            log.info("Received");
+            log.info("Submit start student={} assignment={} course={}", student, assignment, course);
+
             String objectPath = storageService.upload(file, student, assignment, course, "Submissions");
-            log.info("Uploaded");
+            log.info("Upload ok path={}", objectPath);
+
             long submissionID = dbHandler.generateSubmissionID();
-            log.info("ID Generated");
+            log.info("Generated submissionID={}", submissionID);
+
             results.generateResults(file, course, assignment);
+            log.info("Results generated");
+
             dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
-            log.info("Complete");
+            log.info("DB insertSubmission ok id={}", submissionID);
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");
-        } catch (Exception e) {
+        } catch (DataAccessException dae) {
+            log.error("Database error during submit", dae);
+            String root = dae.getMostSpecificCause() != null ? dae.getMostSpecificCause().getMessage() : dae.getMessage();
+            return ResponseEntity.status(500).body("Database error: " + root);
+        }
+        catch (Exception e) {
             return ResponseEntity.status(502).body("Upload failed: " + e.getMessage());
         }
+
     }
 }
