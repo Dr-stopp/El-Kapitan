@@ -96,4 +96,11 @@
   opacity: 0.8;
 }
 
+/* Floating theme toggle — only visible on the login page */
+.btn-theme-floating {
+    position: fixed;   /* stays in corner regardless of scroll */
+    
+    z-index: 999;      /* sits above everything else on the page */
+}
+
 

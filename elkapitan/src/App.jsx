@@ -17,13 +17,21 @@ import InstructorDashboard from './components/Instructor/InstructorDashboard';
 import './App.css';
 import { supabase } from './supabaseClient';
 
+
+
 function App() {
 
   const [user, setUser]   = useState(null);
-  //saving in local storage so it doesnt rest on reload
+
+  // saving in localStorage so it doesn't reset on reload
   const [theme, setTheme] = useState(
     localStorage.getItem('theme') || 'light'
   );
+
+  // Prevents the app from rendering anything until getSession() has finished.
+  // Without this, there is a brief flash of the dashboard before the role
+  // check in handleSignIn has a chance to reject and sign the user out.
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   // ── Side-effect: apply theme to <html> ────────────────────────────────────
   // Stamps data-theme="light|dark" on the root <html> element so the CSS
@@ -34,17 +42,15 @@ function App() {
   }, [theme]);
 
 
-  // When the app first mounts, ask Supabase "is there already a logged-in
-  // session stored in this browser?" (it keeps one in localStorage).
-  // If yes, pull the user out and set state — the dashboard appears
-  // immediately without needing to log in again.
+  // ── Session Restore on Page Refresh ─────────────────────────────────────────
+  // When the app first mounts, check if Supabase has a saved session in
+  // localStorage (only exists if the user logged in with Remember Me checked).
+  // If yes, restore the user state so they don't have to log in again.
+  // If no session exists, user stays null and the Login screen shows.
   useEffect(() => {
-
-      // getSession() is async — it checks localStorage for a saved token
-      // and validates it against Supabase.
       supabase.auth.getSession().then(({ data: { session } }) => {
+
           if (session) {
-              // session.user has the same shape as signIn's data.user
               const { id, email, user_metadata } = session.user;
               setUser({
                   id,
@@ -54,36 +60,18 @@ function App() {
                   lastName:  user_metadata.lastName,
               });
           }
-          // If session is null, user stays null → Login screen shows
+
+          // Mark session check as done whether a session was found or not.
+        // Nothing renders until this flips to true.
+        setSessionChecked(true);
+
       });
-
-      // onAuthStateChange fires whenever Supabase detects a login or logout —
-      // including when the session token expires or is revoked remotely.
-      // This keeps your app in sync automatically.
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (_event, session) => {
-              if (session) {
-                  const { id, email, user_metadata } = session.user;
-                  setUser({ id, email,
-                      role:      user_metadata.role,
-                      firstName: user_metadata.firstName,
-                      lastName:  user_metadata.lastName,
-                  });
-              } else {
-                  // session is null = user logged out or token expired
-                  setUser(null);
-              }
-          }
-      );
-
-      // Cleanup: unsubscribe when App unmounts (prevents memory leaks)
-      return () => subscription.unsubscribe();
 
   }, []); // [] = run once on mount only
 
 
 
-   // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   /**
    * toggleTheme
@@ -113,10 +101,11 @@ function App() {
   };
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
-  // Instead of separate return statements for each case, we render ONE structure
-  // with a global header that appears for everyone, then conditionally show
-  // the appropriate content below based on login state and role.
-  
+
+  // Don't render anything until we know if there is a saved session or not.
+  // This prevents the dashboard from flashing before the role check can fire.
+  if (!sessionChecked) return null;
+
   return (
     <div className="app-wrapper">
       
@@ -153,23 +142,30 @@ function App() {
           </div>
         </header>
       )}
+      
+      {/* Theme toggle — always visible regardless of login state             
+          When logged out it floats on the login page, when logged in         
+          it moves into the header above                                      */}
+      {!user && (
+          <button className="btn-theme btn-theme-floating" onClick={toggleTheme}>
+              {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+      )}
 
       {/* ── MAIN CONTENT ───────────────────────────────────────────────────── */}
       {/* Conditionally render different views based on user state */}
       
-      {/* Not logged in → show Login */}
-      {!user && <Login onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />}
-      
-      {/* Logged in as student → show StudentDashboard */}
+      {!user && <Login onLogin={handleLogin} />}
+
       {user?.role === 'student' && (
-        <StudentDashboard user={user} onLogout={handleLogout} />
+          <StudentDashboard user={user} onLogout={handleLogout} />
       )}
-      
-      {/* Logged in as instructor → show InstructorDashboard */}
+
       {user?.role === 'instructor' && (
-        <InstructorDashboard user={user} onLogout={handleLogout} />
+          <InstructorDashboard user={user} onLogout={handleLogout} />
       )}
-      
+
+
       {/* Logged in but unrecognized role → show fallback */}
       {user && user.role !== 'student' && user.role !== 'instructor' && (
         <main className="main-content">

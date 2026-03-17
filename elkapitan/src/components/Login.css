@@ -118,3 +118,43 @@
     font-size: 0.8rem;
     color: var(--text-secondary); /* */
 }
+
+
+/* ── Typing Animation ─────────────────────────────────────────────────────── */
+
+.typing-container {
+    display: flex;
+    flex-direction: column;  /* stacks WELCOME and description vertically */
+    align-items: center;     /* centers both blocks horizontally */
+    gap: 0.5rem;
+}
+
+/* The blinking cursor — animates opacity between visible and invisible */
+.typing-cursor {
+    display: inline;
+    font-weight: 100;
+    color: var(--text-primary);
+    animation: blink 0.7s step-end infinite; /* step-end makes it snap, not fade */
+}
+
+.typed-welcome {
+    display: block;        /* forces WELCOME onto its own line */
+    font-size: 5.5rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.typed-description {
+    display: block;        /* forces description onto its own line */
+    font-size: 1.5rem;
+    line-height: 1.7;
+    text-align: center;
+    white-space: pre-line; /* preserves line breaks in the description */
+}
+
+@keyframes blink {
+    0%,
+    100% { opacity: 1; }  /* visible */
+    50%  { opacity: 0; }  /* invisible */
+}
