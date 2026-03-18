@@ -205,6 +205,10 @@ function Login({ onLogin }) {  // removed theme/onToggleTheme — App.jsx owns t
                 // created_at is handled automatically by Supabase — no need to pass it
             });
 
+        // temporary — log both outcomes so we can see what's happening
+        // console.log('insert error:', insertError);
+        // console.log('insert attempted with id:', data.user.id);
+
         if (insertError) {
             // Auth account was created but profile insert failed —
             // the user exists in Supabase Auth but has no row in our users table.
