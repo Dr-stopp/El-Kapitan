@@ -84,28 +84,43 @@ function Login({ onLogin }) {  // removed theme/onToggleTheme — App.jsx owns t
         setLoading(true);
 
         // signInWithPassword checks email + password against Supabase Auth
-        // Supabase also sets a session cookie automatically on success —
-        // that's what lets App.jsx restore the session on page refresh
+        // persistSession tells Supabase whether to save the session token to
+        // localStorage — if false, the session dies when the browser is closed
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password,
+            options: {
+                persistSession: rememberMe,
+            }
         });
 
         if (error) {
-            // Common Supabase errors: "Invalid login credentials", "Email not confirmed"
             alert(error.message);
             setLoading(false);
             return;
         }
 
-        const { id, email: userEmail, user_metadata } = data.user;
+        // Now fetch the user's profile from our own users table
+        // using the id Supabase Auth just gave us after login
+        const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('role, first_name, last_name')
+            .eq('id', data.user.id)  // match on the auth user's id
+            .single();               // we expect exactly one row
+
+        if (profileError || !profile) {
+            alert('Could not load user profile. Please contact support.');
+            console.error('users table fetch error:', profileError);
+            await supabase.auth.signOut(); // kill the session since we can't load the profile
+            setLoading(false);
+            return;
+        }
 
         // Guard: the role the user selected in the dropdown must match
-        // the role stored in their Supabase user_metadata at signup time
-        if (user_metadata.role !== role) {
-
+        // the role stored in our users table — not user_metadata anymore
+        if (profile.role !== role) {
             await supabase.auth.signOut(); // kill the session Supabase just created
-            alert(`Incorrect role selected. Please log in as ${user_metadata.role}.`);
+            alert(`Incorrect role selected. Please log in as ${profile.role}.`);
             setLoading(false);
             return;
         }
@@ -113,11 +128,11 @@ function Login({ onLogin }) {  // removed theme/onToggleTheme — App.jsx owns t
         // Pass a clean flat user object up to App.jsx via the onLogin prop
         // App.jsx stores this in its user state and routes to the correct dashboard
         onLogin({
-            id,
-            email:     userEmail,
-            role:      user_metadata.role,
-            firstName: user_metadata.firstName,
-            lastName:  user_metadata.lastName,
+            id:        data.user.id,
+            email:     data.user.email,
+            role:      profile.role,
+            firstName: profile.first_name,  // snake_case from our users table
+            lastName:  profile.last_name,
         });
 
         setLoading(false);
@@ -175,8 +190,33 @@ function Login({ onLogin }) {  // removed theme/onToggleTheme — App.jsx owns t
             return;
         }
 
+        // supabase.auth.signUp was successful — now insert the user's profile
+        // into our own users table using the id Supabase Auth just generated.
+        // This is what actually populates our users table — user_metadata alone
+        // is not enough as it lives inside Supabase Auth, not our own database.
+        const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+                id:         data.user.id,   // must match the auth user's id exactly
+                email:      email,          // the email they signed up with
+                role:       role,           // 'student' | 'instructor'
+                first_name: firstName,      // note: Supabase columns use snake_case
+                last_name:  lastName,
+                // created_at is handled automatically by Supabase — no need to pass it
+            });
+
+        if (insertError) {
+            // Auth account was created but profile insert failed —
+            // the user exists in Supabase Auth but has no row in our users table.
+            // Log the error for debugging but don't leave the user hanging.
+            alert('Account created but profile could not be saved. Please contact support.');
+            console.error('users table insert error:', insertError);
+            setLoading(false);
+            return;
+        }
+
         // Prompt the user to confirm their email before logging in
-        alert(`${data.user.user_metadata.firstName}, your ${role} account was created! Please check your email to confirm, then log in.`);
+        alert(`${firstName}, your ${role} account was created! Please check your email to confirm, then log in.`);
         setIsSignUp(false); // switch back to the login view
         setLoading(false);
     };

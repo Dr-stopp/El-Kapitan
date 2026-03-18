@@ -43,30 +43,34 @@ function App() {
 
 
   // ── Session Restore on Page Refresh ─────────────────────────────────────────
-  // When the app first mounts, check if Supabase has a saved session in
-  // localStorage (only exists if the user logged in with Remember Me checked).
-  // If yes, restore the user state so they don't have to log in again.
-  // If no session exists, user stays null and the Login screen shows.
+  // Checks localStorage for a saved Supabase session (only exists if the user
+  // logged in with Remember Me checked). If found, fetches the user's profile
+  // from our users table instead of relying on user_metadata.
   useEffect(() => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
 
           if (session) {
-              const { id, email, user_metadata } = session.user;
-              setUser({
-                  id,
-                  email,
-                  role:      user_metadata.role,
-                  firstName: user_metadata.firstName,
-                  lastName:  user_metadata.lastName,
-              });
+              // fetch profile from our users table using the session's user id
+              const { data: profile, error } = await supabase
+                  .from('users')
+                  .select('role, first_name, last_name')
+                  .eq('id', session.user.id)
+                  .single();
+
+              if (profile && !error) {
+                  setUser({
+                      id:        session.user.id,
+                      email:     session.user.email,
+                      role:      profile.role,
+                      firstName: profile.first_name,
+                      lastName:  profile.last_name,
+                  });
+              }
           }
 
-          // Mark session check as done whether a session was found or not.
-        // Nothing renders until this flips to true.
-        setSessionChecked(true);
-
+          // mark session check as done whether a session was found or not
+          setSessionChecked(true);
       });
-
   }, []); // [] = run once on mount only
 
 
@@ -86,18 +90,12 @@ function App() {
     });
   };
 
-  /**
-   * handleLogin
-   * Called by: Login.jsx via the `onLogin` prop after mockAuth.signIn succeeds.
-   * Receives: { id, email, role, firstName, lastName }
-   * Setting `user` triggers a re-render → App routes to the correct dashboard.
-   */
-  const handleLogin = (userData) => setUser(userData);
-
-  //clears Supabase session first, then clears React state
+  // Clears Supabase session first, then clears React state.
+  // Order matters — signOut() must happen before setUser(null)
+  // otherwise the session restore useEffect might catch the stale session
   const handleLogout = async () => {
       await supabase.auth.signOut(); // deletes the token from localStorage
-      setUser(null);                  // clears the user from React state
+      setUser(null);                 // clears the user from React state
   };
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
@@ -142,7 +140,7 @@ function App() {
           </div>
         </header>
       )}
-      
+
       {/* Theme toggle — always visible regardless of login state             
           When logged out it floats on the login page, when logged in         
           it moves into the header above                                      */}
@@ -155,7 +153,7 @@ function App() {
       {/* ── MAIN CONTENT ───────────────────────────────────────────────────── */}
       {/* Conditionally render different views based on user state */}
       
-      {!user && <Login onLogin={handleLogin} />}
+      {!user && <Login onLogin={setUser} />}
 
       {user?.role === 'student' && (
           <StudentDashboard user={user} onLogout={handleLogout} />
@@ -166,13 +164,11 @@ function App() {
       )}
 
 
-      {/* Logged in but unrecognized role → show fallback */}
+      {/* Unrecognized role — sign them out immediately rather than showing a dead end */}
       {user && user.role !== 'student' && user.role !== 'instructor' && (
-        <main className="main-content">
-          <h1>Dashboard coming soon</h1>
-        </main>
+          handleLogout()
       )}
-      
+            
     </div>
   );
 }
