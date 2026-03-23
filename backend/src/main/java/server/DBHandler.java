@@ -180,4 +180,9 @@ public class DBHandler {
                 submission1FileName, submission2FileName
         );
     }
+
+    public int getTopK(long assignment) {
+        String sql = "Select top_k from assignment_runs where assignment_run_id = " + assignment;
+        return jdbc.queryForObject(sql, Integer.class);
+    }
 }
