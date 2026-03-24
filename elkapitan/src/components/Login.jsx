@@ -62,7 +62,7 @@ function Login({ onLogin }) {  // removed theme/onToggleTheme — App.jsx owns t
         // Cleanup: cancel the pending timeout if component unmounts mid-animation
         return () => clearTimeout(timeout);
 
-    }, []); // [] = run once on mount only
+    }, [fullText, welcomeText.length]); // include dependencies used in the effect
 
 
     // ── Form Submit Handler ─────────────────────────────────────────────────────

@@ -1,0 +1,210 @@
+/**
+ * SubmissionPage Component
+ *
+ * Responsibilities:
+ *   - Lets the student pick multiple files
+ *   - Zips them into a single .zip file in the browser using JSZip
+ *   - Uploads the zip to Supabase Storage
+ *   - Upserts a row in the submissions table (anonymous_token, file_path, status)
+ *   - Calls onSubmissionSuccess callback so StudentDashboard can update the assignment card
+ *
+ * Props received:
+ *   user               — logged-in student object (we use user.id)
+ *   selectedAssignment — assignment object (deployment_id, name, due_date, number, submitted)
+ *   selectedCourse     — course object (course_id, course_name)
+ *   onSubmissionSuccess — callback function from StudentDashboard, called after successful upload
+ *                         IN: deployment_id  OUT: nothing, just triggers parent state update
+ */
+
+import React, { useState } from 'react';
+import JSZip from 'jszip'; // npm install jszip — like Java's ZipOutputStream but for the browser
+import { supabase } from '../../supabaseClient.js';
+import { formatDueDate } from '../../utils.js';
+import './StudentDashboard.css';
+
+export default function SubmissionPage({ user, selectedAssignment, selectedCourse, onSubmissionSuccess }) {
+
+    // ── State ────────────────────────────────────────────────────────────────
+
+    // Stores the array of File objects the student picked
+    // IN:  set by the file picker onChange
+    // OUT: passed into JSZip, displayed as a list below the drop zone
+    // Like a List<File> in Java
+    const [selectedFiles, setSelectedFiles] = useState([]);
+
+    // Controls the submit button label and disabled state
+    // 'idle'       = waiting for student to pick files
+    // 'uploading'  = zip is being uploaded to Supabase Storage
+    // 'saving'     = writing the row to submissions table
+    // 'done'       = everything succeeded
+    const [submitStatus, setSubmitStatus] = useState('idle');
+
+
+    // ── Handlers ─────────────────────────────────────────────────────────────
+
+    // Called when student picks files from the file picker
+    // IN:  e.target.files — FileList object from the browser (like an array of File objects)
+    // OUT: stores them as a real JS array in selectedFiles state
+    const handleFileChange = (e) => {
+        // Array.from converts FileList (browser type) to a normal JS array
+        // Like converting an Iterator to an ArrayList in Java
+        setSelectedFiles(Array.from(e.target.files));
+    };
+
+
+    // Called when student clicks Submit
+    // Zips files → uploads to Storage → upserts submissions row
+    const handleSubmit = async () => {
+
+        // Guard — do nothing if no files selected
+        if (selectedFiles.length === 0) return;
+
+        // ── Step 1: Generate anonymous token ────────────────────────────────
+        // crypto.randomUUID() = UUID.randomUUID() in Java
+        // This is what Spring Boot will receive instead of the real student_id
+        const anonymousToken = crypto.randomUUID();
+
+
+        // ── Step 2: Zip all selected files in the browser ───────────────────
+        // JSZip works like ZipOutputStream in Java
+        // IN:  selectedFiles[] — array of File objects
+        // OUT: zipBlob — a Blob (raw binary data, like byte[]) representing the zip
+        setSubmitStatus('uploading');
+
+        const zip = new JSZip();
+
+        // Add each file into the zip
+        // zip.file(name, content) = zipOutputStream.putNextEntry() in Java
+        selectedFiles.forEach(file => {
+            zip.file(file.name, file);
+        });
+
+        // generateAsync returns a Promise that resolves to a Blob
+        // { type: 'blob' } means give it back as binary data, not base64
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+
+        // ── Step 3: Upload zip to Supabase Storage ───────────────────────────
+        // Path: submissions/studentId/deploymentId/submission.zip
+        // Using the same path every time = upsert: true will overwrite on resubmit
+        const filePath = `${user.id}/${selectedAssignment.deployment_id}/submission.zip`;
+
+        const { error: storageError } = await supabase.storage
+            .from('submissions')
+            .upload(filePath, zipBlob, {
+                upsert: true,          // overwrite if student resubmits
+                contentType: 'application/zip',
+            });
+
+        if (storageError) {
+            alert('Upload failed: ' + storageError.message);
+            setSubmitStatus('idle');
+            return;
+        }
+
+
+        // ── Step 4: Upsert row in submissions table ──────────────────────────
+        // upsert = INSERT if no row exists, UPDATE if row already exists
+        // onConflict tells Supabase which columns define "already exists"
+        // equivalent to: INSERT ... ON CONFLICT (student_id, deployment_id) DO UPDATE SET ...
+        setSubmitStatus('saving');
+
+        const { error: dbError } = await supabase
+            .from('submissions')
+            .upsert(
+                {
+                    student_id:      user.id,                          // real identity — stays in YOUR db
+                    deployment_id:   selectedAssignment.deployment_id,
+                    anonymous_token: anonymousToken,                   // new token every resubmit
+                    file_path:       filePath,                         // path in Supabase Storage
+                    submitted_at:    new Date().toISOString(),         // current timestamp
+                    status:          'pending',                        // instructor hasn't reviewed yet
+                    grade:           null,                             // not graded yet
+                    similarity_report: null,                           // not processed yet
+                },
+                { onConflict: 'student_id, deployment_id' } // update existing row on resubmit
+            );
+
+        if (dbError) {
+            alert('Failed to save submission record: ' + dbError.message);
+            setSubmitStatus('idle');
+            return;
+        }
+
+
+        // ── Step 5: Notify parent and update UI ──────────────────────────────
+        // Call the callback StudentDashboard passed down as a prop
+        // This flips the assignment card from 'Not Submitted' to 'Submitted'
+        // Like calling a listener.onComplete() in Java
+        onSubmissionSuccess(selectedAssignment.deployment_id);
+
+        setSelectedFiles([]);
+        setSubmitStatus('done');
+    };
+
+
+    // ── Button label helper ──────────────────────────────────────────────────
+    // Returns the right label based on current submitStatus
+    // Like a switch statement mapping status → display string
+    const buttonLabel = () => {
+        if (submitStatus === 'uploading') return 'Uploading...';
+        if (submitStatus === 'saving')    return 'Saving...';
+        if (submitStatus === 'done')      return 'Submitted ✓';
+        return 'Submit';
+    };
+
+
+    // ── Render ───────────────────────────────────────────────────────────────
+
+    return (
+        <main className="student-body">
+
+            {/* Assignment header — name, number, due date */}
+            <div className="submission-header">
+                <p className="submission-assignment-number">Assignment {selectedAssignment.number}</p>
+                <h2 className="submission-title">{selectedAssignment.name}</h2>
+                <p className="submission-due">Due: {formatDueDate(selectedAssignment.due_date)}</p>
+            </div>
+
+            {/* Drop zone — multiple={true} allows picking more than one file */}
+            {/* The hidden file input covers the whole zone so anywhere you click opens the picker */}
+            <div className="drop-zone">
+                <input
+                    type="file"
+                    multiple={true}     // key difference from old version — allows multiple files
+                    onChange={handleFileChange}
+                />
+                <div className="drop-zone-icon">📂</div>
+
+                {/* Show list of selected files, or placeholder text if none picked yet */}
+                {selectedFiles.length > 0 ? (
+                    // Map each File object to a line — like printing a List<File> in Java
+                    selectedFiles.map((file, index) => (
+                        <p key={index} className="drop-zone-text">✓ {file.name}</p>
+                    ))
+                ) : (
+                    <p className="drop-zone-text">Drag & drop your files here, or click to browse</p>
+                )}
+            </div>
+
+            {/* Submit button */}
+            {/* Disabled while uploading/saving OR if no files picked */}
+            <button
+                className="btn-submit"
+                onClick={handleSubmit}
+                disabled={selectedFiles.length === 0 || submitStatus === 'uploading' || submitStatus === 'saving'}
+            >
+                {buttonLabel()}
+            </button>
+
+            {/* Success banner — shown after successful submission */}
+            {/* selectedAssignment.submitted covers the case where they already submitted before opening this page */}
+            {(submitStatus === 'done' || selectedAssignment.submitted) && (
+                <p className="status-submitted full">
+                    ✓ Assignment submitted — waiting for instructor review
+                </p>
+            )}
+
+        </main>
+    );
+}
