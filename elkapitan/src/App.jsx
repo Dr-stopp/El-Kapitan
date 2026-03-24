@@ -17,13 +17,21 @@ import InstructorDashboard from './components/Instructor/InstructorDashboard';
 import './App.css';
 import { supabase } from './supabaseClient';
 
+
+
 function App() {
 
   const [user, setUser]   = useState(null);
-  //saving in local storage so it doesnt rest on reload
+
+  // saving in localStorage so it doesn't reset on reload
   const [theme, setTheme] = useState(
     localStorage.getItem('theme') || 'light'
   );
+
+  // Prevents the app from rendering anything until getSession() has finished.
+  // Without this, there is a brief flash of the dashboard before the role
+  // check in handleSignIn has a chance to reject and sign the user out.
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   // ── Side-effect: apply theme to <html> ────────────────────────────────────
   // Stamps data-theme="light|dark" on the root <html> element so the CSS
@@ -34,56 +42,40 @@ function App() {
   }, [theme]);
 
 
-  // When the app first mounts, ask Supabase "is there already a logged-in
-  // session stored in this browser?" (it keeps one in localStorage).
-  // If yes, pull the user out and set state — the dashboard appears
-  // immediately without needing to log in again.
+  // ── Session Restore on Page Refresh ─────────────────────────────────────────
+  // Checks localStorage for a saved Supabase session (only exists if the user
+  // logged in with Remember Me checked). If found, fetches the user's profile
+  // from our users table instead of relying on user_metadata.
   useEffect(() => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
 
-      // getSession() is async — it checks localStorage for a saved token
-      // and validates it against Supabase.
-      supabase.auth.getSession().then(({ data: { session } }) => {
           if (session) {
-              // session.user has the same shape as signIn's data.user
-              const { id, email, user_metadata } = session.user;
-              setUser({
-                  id,
-                  email,
-                  role:      user_metadata.role,
-                  firstName: user_metadata.firstName,
-                  lastName:  user_metadata.lastName,
-              });
-          }
-          // If session is null, user stays null → Login screen shows
-      });
+              // fetch profile from our users table using the session's user id
+              const { data: profile, error } = await supabase
+                  .from('users')
+                  .select('role, first_name, last_name')
+                  .eq('id', session.user.id)
+                  .single();
 
-      // onAuthStateChange fires whenever Supabase detects a login or logout —
-      // including when the session token expires or is revoked remotely.
-      // This keeps your app in sync automatically.
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (_event, session) => {
-              if (session) {
-                  const { id, email, user_metadata } = session.user;
-                  setUser({ id, email,
-                      role:      user_metadata.role,
-                      firstName: user_metadata.firstName,
-                      lastName:  user_metadata.lastName,
+              if (profile && !error) {
+                  setUser({
+                      id:        session.user.id,
+                      email:     session.user.email,
+                      role:      profile.role,
+                      firstName: profile.first_name,
+                      lastName:  profile.last_name,
                   });
-              } else {
-                  // session is null = user logged out or token expired
-                  setUser(null);
               }
           }
-      );
 
-      // Cleanup: unsubscribe when App unmounts (prevents memory leaks)
-      return () => subscription.unsubscribe();
-
+          // mark session check as done whether a session was found or not
+          setSessionChecked(true);
+      });
   }, []); // [] = run once on mount only
 
 
 
-   // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   /**
    * toggleTheme
@@ -98,25 +90,20 @@ function App() {
     });
   };
 
-  /**
-   * handleLogin
-   * Called by: Login.jsx via the `onLogin` prop after mockAuth.signIn succeeds.
-   * Receives: { id, email, role, firstName, lastName }
-   * Setting `user` triggers a re-render → App routes to the correct dashboard.
-   */
-  const handleLogin = (userData) => setUser(userData);
-
-  //clears Supabase session first, then clears React state
+  // Clears Supabase session first, then clears React state.
+  // Order matters — signOut() must happen before setUser(null)
+  // otherwise the session restore useEffect might catch the stale session
   const handleLogout = async () => {
       await supabase.auth.signOut(); // deletes the token from localStorage
-      setUser(null);                  // clears the user from React state
+      setUser(null);                 // clears the user from React state
   };
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
-  // Instead of separate return statements for each case, we render ONE structure
-  // with a global header that appears for everyone, then conditionally show
-  // the appropriate content below based on login state and role.
-  
+
+  // Don't render anything until we know if there is a saved session or not.
+  // This prevents the dashboard from flashing before the role check can fire.
+  if (!sessionChecked) return null;
+
   return (
     <div className="app-wrapper">
       
@@ -154,29 +141,34 @@ function App() {
         </header>
       )}
 
+      {/* Theme toggle — always visible regardless of login state             
+          When logged out it floats on the login page, when logged in         
+          it moves into the header above                                      */}
+      {!user && (
+          <button className="btn-theme btn-theme-floating" onClick={toggleTheme}>
+              {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+      )}
+
       {/* ── MAIN CONTENT ───────────────────────────────────────────────────── */}
       {/* Conditionally render different views based on user state */}
       
-      {/* Not logged in → show Login */}
-      {!user && <Login onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />}
-      
-      {/* Logged in as student → show StudentDashboard */}
+      {!user && <Login onLogin={setUser} />}
+
       {user?.role === 'student' && (
-        <StudentDashboard user={user} onLogout={handleLogout} />
+          <StudentDashboard user={user} onLogout={handleLogout} />
       )}
-      
-      {/* Logged in as instructor → show InstructorDashboard */}
+
       {user?.role === 'instructor' && (
-        <InstructorDashboard user={user} onLogout={handleLogout} />
+          <InstructorDashboard user={user} onLogout={handleLogout} />
       )}
-      
-      {/* Logged in but unrecognized role → show fallback */}
+
+
+      {/* Unrecognized role — sign them out immediately rather than showing a dead end */}
       {user && user.role !== 'student' && user.role !== 'instructor' && (
-        <main className="main-content">
-          <h1>Dashboard coming soon</h1>
-        </main>
+          handleLogout()
       )}
-      
+            
     </div>
   );
 }
