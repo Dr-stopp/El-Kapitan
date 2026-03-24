@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import org.antlr.v4.runtime.*;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -15,16 +16,15 @@ import java.util.List;
 
 public class MultiLangTokenizer {
     List<String> ignoredTokens = new LinkedList();
-    
+
     public MultiLangTokenizer() throws FileNotFoundException, IOException{
-         try (BufferedReader reader = new BufferedReader(new FileReader("backend/src/Main/resources/Ignore.txt"))) {
-            String line = reader.readLine();
-            while(line !=null){
-                ignoredTokens.add(line);
-                System.out.println(line);
-                line = reader.readLine();
-            }
-        }
+        //try (BufferedReader reader = new BufferedReader(new FileReader("backend/src/Main/resources/Ignore.txt"))) {
+        //   String line = reader.readLine();
+        //   while(line !=null){
+        //       ignoredTokens.add(line);
+        //       line = reader.readLine();
+        //   }
+        //
          
     }
 
@@ -35,13 +35,13 @@ public class MultiLangTokenizer {
 
         if (filePath.endsWith(".java")) {
             lexer = new JavaLexer(input);
-        } 
+        }
         else if (filePath.endsWith(".c")) {
             lexer = new CLexer(input);
-        } 
+        }
         else if (filePath.endsWith(".cpp")) {
             lexer = new CPP14Lexer(input);
-        } 
+        }
         else {
             throw new IllegalArgumentException("Unsupported file type");
         }
@@ -49,9 +49,9 @@ public class MultiLangTokenizer {
         Token token;
         List<Node> tokenList = new LinkedList();
         while ((token = lexer.nextToken()).getType() != Token.EOF) {
-    if (token.getChannel() == Token.DEFAULT_CHANNEL) {
+            if (token.getChannel() == Token.DEFAULT_CHANNEL) {
 
-        String tokenName = lexer.getVocabulary().getSymbolicName(token.getType());
+                String tokenName = lexer.getVocabulary().getSymbolicName(token.getType());
 
         int line = token.getLine();
         int column = token.getCharPositionInLine();
@@ -70,5 +70,5 @@ public class MultiLangTokenizer {
     }
 
 
-    
+
 }

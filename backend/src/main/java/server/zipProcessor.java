@@ -98,7 +98,4 @@ public class zipProcessor {
         return fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
-    public static void main(String[] args) throws IOException {
-
-    }
 }
