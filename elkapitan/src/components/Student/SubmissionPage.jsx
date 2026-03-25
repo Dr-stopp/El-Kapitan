@@ -22,6 +22,26 @@ import { supabase } from '../../supabaseClient.js';
 import { formatDueDate } from '../../utils.js';
 import './StudentDashboard.css';
 
+// Maps DB language value → allowed extensions + hint text shown to the student.
+
+const LANGUAGE_CONFIG = {
+    java:   { label: 'Java',   extensions: ['.java'] },
+    cpp:    { label: 'C++',    extensions: ['.cpp', '.h', '.hpp', '.cc', '.cxx'] },
+    python: { label: 'Python', extensions: ['.py'] },
+};
+
+// Returns config for the given language, or a safe fallback that allows any extension.
+const getLanguageConfig = (language) =>
+    LANGUAGE_CONFIG[language] ?? { label: language ?? 'any', extensions: [] };
+
+// Returns true if the filename has one of the allowed extensions. Case-insensitive.
+const hasAllowedExtension = (filename, extensions) => {
+    if (extensions.length === 0) return true;
+    const lower = filename.toLowerCase();
+    return extensions.some(ext => lower.endsWith(ext));
+};
+
+
 export default function SubmissionPage({ user, selectedAssignment, selectedCourse, onSubmissionSuccess }) {
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -32,6 +52,9 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
     // Like a List<File> in Java
     const [selectedFiles, setSelectedFiles] = useState([]);
 
+    // Stores the names of files the student picked that had the wrong extension
+    const [invalidFiles, setInvalidFiles] = useState([]);
+
     // Controls the submit button label and disabled state
     // 'idle'       = waiting for student to pick files
     // 'uploading'  = zip is being uploaded to Supabase Storage
@@ -39,16 +62,32 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
     // 'done'       = everything succeeded
     const [submitStatus, setSubmitStatus] = useState('idle');
 
+    // Derived from the prop — not state, just computed fresh each render.
+    const langConfig = getLanguageConfig(selectedAssignment.language);
+
 
     // ── Handlers ─────────────────────────────────────────────────────────────
 
     // Called when student picks files from the file picker
     // IN:  e.target.files — FileList object from the browser (like an array of File objects)
-    // OUT: stores them as a real JS array in selectedFiles state
+    // OUT: valid files stored in selectedFiles, invalid filenames stored in invalidFiles
     const handleFileChange = (e) => {
+
         // Array.from converts FileList (browser type) to a normal JS array
         // Like converting an Iterator to an ArrayList in Java
-        setSelectedFiles(Array.from(e.target.files));
+        const files = Array.from(e.target.files);
+
+        // Split files into valid and invalid based on the assignment's required language
+        // hasAllowedExtension checks the file extension against langConfig.extensions
+        // e.g. for Java: ['.java'] — a file named 'Main.cpp' would fail this check
+        const valid   = files.filter(f => hasAllowedExtension(f.name, langConfig.extensions));
+        const invalid = files.filter(f => !hasAllowedExtension(f.name, langConfig.extensions));
+
+        // Only valid files are stored — invalid files can never be submitted
+        setSelectedFiles(valid);
+
+        // Store just the filenames of invalid files so we can warn the student in the UI
+        setInvalidFiles(invalid.map(f => f.name));
     };
 
 
@@ -139,6 +178,7 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
         onSubmissionSuccess(selectedAssignment.deployment_id);
 
         setSelectedFiles([]);
+        setInvalidFiles([]);   // clear the warnings on successful submit
         setSubmitStatus('done');
     };
 
@@ -159,12 +199,31 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
     return (
         <main className="student-body">
 
-            {/* Assignment header — name, number, due date */}
+            {/* Assignment header — course, assignment name, due date */}
             <div className="submission-header">
                 <p className="submission-assignment-number">Assignment {selectedAssignment.number}</p>
                 <h2 className="submission-title">{selectedAssignment.name}</h2>
-                <p className="submission-due">Due: {formatDueDate(selectedAssignment.due_date)}</p>
             </div>
+ 
+            {/* Submission info block — course name, assignment name, due date */}
+            <div className="submission-info">
+                <div className="submission-info-row">
+                    <span className="submission-info-label">Course</span>
+                    <span className="submission-info-value">{selectedCourse.course_name}</span>
+                </div>
+                <div className="submission-info-row">
+                    <span className="submission-info-label">Assignment</span>
+                    <span className="submission-info-value">{selectedAssignment.name}</span>
+                </div>
+                <div className="submission-info-row">
+                    <span className="submission-info-label">Due Date</span>
+                    <span className="submission-info-value">{formatDueDate(selectedAssignment.due_date)}</span>
+                </div>
+            </div>
+ 
+            {/* Language requirement — tells the student what file type to submit */}
+            <p className="language-hint">Submissions must be in {langConfig.label}</p>
+
 
             {/* Drop zone — multiple={true} allows picking more than one file */}
             {/* The hidden file input covers the whole zone so anywhere you click opens the picker */}
@@ -177,15 +236,28 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
                 <div className="drop-zone-icon">📂</div>
 
                 {/* Show list of selected files, or placeholder text if none picked yet */}
-                {selectedFiles.length > 0 ? (
-                    // Map each File object to a line — like printing a List<File> in Java
-                    selectedFiles.map((file, index) => (
-                        <p key={index} className="drop-zone-text">✓ {file.name}</p>
-                    ))
-                ) : (
+                {/* Valid files — green checkmark */}
+                {selectedFiles.map((file, index) => (
+                    <p key={index} className="drop-zone-text drop-zone-file-valid">✓ {file.name}</p>
+                ))}
+
+                {/* Invalid files — shown as red strikethrough so student knows what was rejected */}
+                {invalidFiles.map((name, index) => (
+                    <p key={`inv-${index}`} className="drop-zone-text drop-zone-file-invalid">✗ {name} — wrong file type</p>
+                ))}
+
+                {/* Placeholder — only shown when nothing has been picked at all */}
+                {selectedFiles.length === 0 && invalidFiles.length === 0 && (
                     <p className="drop-zone-text">Drag & drop your files here, or click to browse</p>
                 )}
             </div>
+
+            {/* Only shown when every file the student picked was the wrong type */}
+            {selectedFiles.length === 0 && invalidFiles.length > 0 && (
+                <p className="language-error">
+                    ⚠ No valid {langConfig.label} files selected. Please check your file extensions.
+                </p>
+            )}
 
             {/* Submit button */}
             {/* Disabled while uploading/saving OR if no files picked */}

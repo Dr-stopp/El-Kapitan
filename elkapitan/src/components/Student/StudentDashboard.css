@@ -44,6 +44,27 @@
   margin: 0 0 30px 0;
 }
 
+/* Language hint shown on the submission page, e.g. "Submissions must be in Java" */
+.language-hint {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #1a3a6b;
+    margin-bottom: 1rem;
+}
+
+.drop-zone-file-valid  { color: #1a6b2f; }
+.drop-zone-file-invalid { color: #a31515; text-decoration: line-through; }
+
+.language-error {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #fff0f0;
+    border: 1px solid #f5c6c6;
+    border-radius: 8px;
+    color: #a31515;
+    font-size: 0.85rem;
+}
+
 .drop-zone {
   border: 2px dashed var(--border-color);
   margin: 0 30%;

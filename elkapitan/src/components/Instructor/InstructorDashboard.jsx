@@ -16,6 +16,13 @@ import '../Dashboard.css';
 import './InstructorDashboard.css'
 import { formatDueDate } from '../../utils.js';
 
+// Maps raw DB language value → human-readable label for display
+const LANGUAGE_LABELS = {
+    java:   'Java',
+    cpp:    'C++',
+    python: 'Python',
+};
+
 export default function InstructorDashboard({ user }) {
 
     // Starts empty, gets filled when Supabase returns data
@@ -44,6 +51,7 @@ export default function InstructorDashboard({ user }) {
         description: '',
         dueDate: '',
         dueTime: '',
+        language: 'java',
     });
 
 
@@ -96,7 +104,7 @@ export default function InstructorDashboard({ user }) {
             // follows foreign key to grab name and description from assignments table
             const { data, error } = await supabase
                 .from('assignment_deployments')
-                .select('deployment_id, assignment_id, due_date, is_visible, assignments(name, description)')
+                .select('deployment_id, assignment_id, due_date, is_visible, assignments(name, description, language)')
                 .eq('course_id', selectedCourse.course_id); // WHERE course_id = selectedCourse.course_id
 
             if (error) {
@@ -120,6 +128,7 @@ export default function InstructorDashboard({ user }) {
                     is_visible:    row.is_visible,
                     name:          row.assignments.name,
                     description:   row.assignments.description,
+                    language:      row.assignments.language,
                 };
             });
 
@@ -279,7 +288,7 @@ export default function InstructorDashboard({ user }) {
         // .select().single() returns the newly created row so we can grab its assignment_id
         const { data: assignmentData, error: error1 } = await supabase
             .from('assignments')
-            .insert({ name: formData.name, description: formData.description })
+            .insert({ name: formData.name, description: formData.description, language: formData.language })
             .select()
             .single();
 
@@ -317,6 +326,7 @@ export default function InstructorDashboard({ user }) {
             description:   formData.description,
             due_date:      localDateObj,
             is_visible:    false,
+            language:      formData.language,
         }]);
     };
 
@@ -329,7 +339,7 @@ export default function InstructorDashboard({ user }) {
         // Only name and description live here — due_date lives in assignment_deployments
         const { error: error1 } = await supabase
             .from('assignments')
-            .update({ name: formData.name, description: formData.description })
+            .update({ name: formData.name, description: formData.description, language: formData.language })
             .eq('assignment_id', editingAssignment.assignment_id);
 
         // If step 1 failed, stop here — don't update the due date if the name/description failed
@@ -356,7 +366,7 @@ export default function InstructorDashboard({ user }) {
         setAssignments((prev) =>
             prev.map((a) =>
                 a.deployment_id === editingAssignment.deployment_id
-                    ? { ...a, name: formData.name, description: formData.description, due_date: localDateObj }
+                    ? { ...a, name: formData.name, description: formData.description, due_date: localDateObj, language: formData.language }
                     : a
             )
         );
@@ -530,6 +540,11 @@ export default function InstructorDashboard({ user }) {
                                     <p className="assignment-number">Assignment {index + 1}</p>
                                     <h2 className="assignment-name">{item.name}</h2>
                                     <p className="assignment-due">Due: {formatDueDate(item.due_date)}</p>
+                                    {item.language && (
+                                        <span className="language-badge">
+                                            {LANGUAGE_LABELS[item.language] ?? item.language}
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Right side — edit and visibility controls */}
@@ -556,6 +571,7 @@ export default function InstructorDashboard({ user }) {
                                                     hour:   '2-digit',
                                                     minute: '2-digit',
                                                 }),
+                                                language:    item.language ?? 'java',
                                             });
                                             setEditingAssignment(item);
                                         }}
@@ -632,6 +648,21 @@ export default function InstructorDashboard({ user }) {
                     value={formData.dueTime}
                     onChange={(e) => handleFormChange('dueTime', e.target.value)}
                 />
+                </div>
+
+
+                {/* Language dropdown */}   
+                <div className="form-group">
+                    <label className="form-label">Submission Language</label>
+                    <select
+                        className="form-input"
+                        value={formData.language}
+                        onChange={(e) => handleFormChange('language', e.target.value)}
+                    >
+                        <option value="java">Java (.java)</option>
+                        <option value="cpp">C++ (.cpp / .h)</option>
+                        <option value="python">Python (.py)</option>
+                    </select>
                 </div>
 
                 {/* Submit button — label changes based on create or edit */}

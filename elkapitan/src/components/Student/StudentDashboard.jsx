@@ -106,7 +106,7 @@ export default function StudentDashboard({ user }) {
             // JOIN: assignment_deployments → assignments
             const { data, error } = await supabase
                 .from('assignment_deployments')
-                .select('deployment_id, due_date, is_visible, assignments(name, description)')
+                .select('deployment_id, due_date, is_visible, assignments(name, description, language)')
                 .eq('course_id', selectedCourse.course_id)
                 .eq('is_visible', true); // student only sees visible assignments
 
@@ -137,6 +137,7 @@ export default function StudentDashboard({ user }) {
                         is_visible:    row.is_visible,
                         name:          row.assignments.name,
                         description:   row.assignments.description,
+                        language:      row.assignments.language,
                         submitted:     submission !== null, // true if a row exists
                     };
                 })
