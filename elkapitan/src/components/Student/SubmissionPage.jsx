@@ -202,7 +202,7 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
             {/* Assignment header — course, assignment name, due date */}
             <div className="submission-header">
                 <p className="submission-assignment-number">Assignment {selectedAssignment.number}</p>
-                <h2 className="submission-title">{selectedAssignment.name}</h2>
+
             </div>
  
             {/* Submission info block — course name, assignment name, due date */}
@@ -219,10 +219,11 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
                     <span className="submission-info-label">Due Date</span>
                     <span className="submission-info-value">{formatDueDate(selectedAssignment.due_date)}</span>
                 </div>
+                <div className="submission-info-row">
+                    <span className="submission-info-label">Language</span>
+                    <span className="submission-info-value">{langConfig.label}</span>
+                </div>
             </div>
- 
-            {/* Language requirement — tells the student what file type to submit */}
-            <p className="language-hint">Submissions must be in {langConfig.label}</p>
 
 
             {/* Drop zone — multiple={true} allows picking more than one file */}

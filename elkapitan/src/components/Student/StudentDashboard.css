@@ -44,13 +44,14 @@
   margin: 0 0 30px 0;
 }
 
-/* Language hint shown on the submission page, e.g. "Submissions must be in Java" */
+/* Language hint shown on the submission page, e.g. "Submissions must be in Java" 
 .language-hint {
     font-size: 0.875rem;
     font-weight: 500;
     color: #1a3a6b;
     margin-bottom: 1rem;
 }
+*/
 
 .drop-zone-file-valid  { color: #1a6b2f; }
 .drop-zone-file-invalid { color: #a31515; text-decoration: line-through; }
@@ -63,6 +64,41 @@
     border-radius: 8px;
     color: #a31515;
     font-size: 0.85rem;
+}
+
+/* ── Submission info block (course / assignment / due date) ── */
+ 
+.submission-info {
+  margin: 20px 10% 24px 10%;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+ 
+.submission-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+ 
+.submission-info-row:last-child {
+  border-bottom: none;
+}
+ 
+.submission-info-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  min-width: 90px;
+}
+ 
+.submission-info-value {
+  font-size: 0.95rem;
+  color: var(--text-primary);
 }
 
 .drop-zone {
