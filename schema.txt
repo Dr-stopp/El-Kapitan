@@ -1,0 +1,74 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.assignment_runs (
+  assignment_run_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  course_id bigint NOT NULL,
+  assign_id bigint,
+  due_date timestamp with time zone NOT NULL,
+  top_k bigint NOT NULL DEFAULT '3'::bigint,
+  threshold bigint NOT NULL DEFAULT '70'::bigint,
+  CONSTRAINT assignment_runs_pkey PRIMARY KEY (assignment_run_id),
+  CONSTRAINT assignment_runs_assign_id_fkey FOREIGN KEY (assign_id) REFERENCES public.assignments(assign_id),
+  CONSTRAINT assignment_runs_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(course_id)
+);
+CREATE TABLE public.assignments (
+  assign_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  course_id bigint NOT NULL,
+  language text NOT NULL,
+  name text NOT NULL,
+  CONSTRAINT assignments_pkey PRIMARY KEY (assign_id),
+  CONSTRAINT Assignments_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(course_id)
+);
+CREATE TABLE public.courses (
+  course_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  course_name character varying,
+  CONSTRAINT courses_pkey PRIMARY KEY (course_id)
+);
+CREATE TABLE public.results (
+  submission_1 bigint NOT NULL,
+  submission_2 bigint NOT NULL,
+  score bigint,
+  date_created timestamp with time zone,
+  pair_id bigint NOT NULL,
+  CONSTRAINT results_pkey PRIMARY KEY (pair_id),
+  CONSTRAINT results_submission_1_fkey FOREIGN KEY (submission_1) REFERENCES public.submissions(submission_id),
+  CONSTRAINT results_submission_2_fkey FOREIGN KEY (submission_2) REFERENCES public.submissions(submission_id)
+);
+CREATE TABLE public.results_sections (
+  section_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  pair_id bigint,
+  submission_1 bigint NOT NULL,
+  submission_2 bigint NOT NULL,
+  submission_1_sec_start bigint NOT NULL,
+  submission_2_sec_start bigint NOT NULL,
+  submission_1_sec_end bigint NOT NULL,
+  submission_2_sec_end bigint NOT NULL,
+  submission_1_file_name text NOT NULL,
+  submission_2_file_name text NOT NULL,
+  CONSTRAINT results_sections_pkey PRIMARY KEY (section_id),
+  CONSTRAINT results_sections_submission_2_fkey FOREIGN KEY (submission_2) REFERENCES public.submissions(submission_id),
+  CONSTRAINT results_sections_submission_1_fkey FOREIGN KEY (submission_1) REFERENCES public.submissions(submission_id),
+  CONSTRAINT results_sections_pair_id_fkey FOREIGN KEY (pair_id) REFERENCES public.results(pair_id)
+);
+CREATE TABLE public.submissions (
+  submission_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  assignment_run_id bigint,
+  student_id bigint NOT NULL,
+  folder_path text NOT NULL UNIQUE,
+  test_flag character varying,
+  CONSTRAINT submissions_pkey PRIMARY KEY (submission_id),
+  CONSTRAINT submissions_assignment_run_id_fkey FOREIGN KEY (assignment_run_id) REFERENCES public.assignment_runs(assignment_run_id)
+);
+CREATE TABLE public.users (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  type character varying NOT NULL,
+  first_name character varying NOT NULL,
+  last_name character varying NOT NULL,
+  email character varying NOT NULL,
+  password character varying NOT NULL,
+  registration_date timestamp with time zone NOT NULL,
+  password_last_changed timestamp with time zone,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);
