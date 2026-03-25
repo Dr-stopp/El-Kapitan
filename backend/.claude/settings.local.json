@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(wc -l /Users/mehrbod/Dev/proj/etc/backend/src/main/java/Tokenizer/src/*.java)"
+    ]
+  }
+}
