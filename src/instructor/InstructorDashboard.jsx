@@ -1,13 +1,5 @@
-//import react hooks
-
-
-// Import React hooks
 import { useEffect, useMemo, useState } from 'react'
-
-// Custom hook to get logged-in user info
 import { useAuth } from '../context/useAuth'
-
-// API functions to communicate with backend
 import {
   createInstructorAssignment,
   deleteInstructorAssignment,
@@ -17,12 +9,8 @@ import {
   fetchReviewQueue,
   updateInstructorAssignment,
 } from './api'
-
-// UI components for different tabs
 import AnalyticsPanel from './AnalyticsPanel'
 import ReviewQueuePanel from './ReviewQueuePanel'
-
-// Utility/helper functions
 import {
   formatDueDate,
   getInitialPrivacyMode,
@@ -30,34 +18,20 @@ import {
   REPOSITORY_SCOPE_OPTIONS,
 } from './utils'
 
-/*
-  Helper function:
-  Sort assignments by due date (earliest first)
-*/
 function sortAssignments(assignments) {
   return [...assignments].sort(
-    (left, right) =>
-      new Date(left.due_date).getTime() - new Date(right.due_date).getTime()
+    (left, right) => new Date(left.due_date).getTime() - new Date(right.due_date).getTime()
   )
 }
 
-/*
-  Helper function:
-  Find the next upcoming assignment deadline
-*/
 function getNextDueLabel(assignments) {
   const nextDue = [...assignments]
     .sort((left, right) => new Date(left.due_date) - new Date(right.due_date))
     .find((item) => new Date(item.due_date).getTime() > Date.now())
 
-  // If found → format date, else show fallback
   return nextDue ? formatDueDate(nextDue.due_date) : 'No upcoming due date'
 }
 
-/*
-  Helper function:
-  Count most common programming language used in assignments
-*/
 function getLanguageBreakdown(assignments) {
   const counts = assignments.reduce((accumulator, item) => {
     const key = item.language || 'Unknown'
@@ -65,52 +39,28 @@ function getLanguageBreakdown(assignments) {
     return accumulator
   }, {})
 
-  // Sort languages by frequency
-  const topLanguage = Object.entries(counts).sort(
-    (left, right) => right[1] - left[1]
-  )[0]
-
-  return topLanguage
-    ? `${topLanguage[0]} (${topLanguage[1]})`
-    : 'No assignments'
+  const topLanguage = Object.entries(counts).sort((left, right) => right[1] - left[1])[0]
+  return topLanguage ? `${topLanguage[0]} (${topLanguage[1]})` : 'No assignments'
 }
 
-/*
-  MAIN COMPONENT
-*/
 export default function InstructorDashboard() {
-  // Get logged-in user
   const { user } = useAuth()
-
-  /*
-    STATE VARIABLES (React memory)
-  */
-  const [courses, setCourses] = useState([]) // list of courses
+  const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
-
   const [selectedCourse, setSelectedCourse] = useState(null)
-
   const [assignments, setAssignments] = useState([])
   const [assignmentsLoading, setAssignmentsLoading] = useState(false)
-
   const [editingAssignment, setEditingAssignment] = useState(null)
-
-  // Form inputs
   const [formName, setFormName] = useState('')
   const [formLanguage, setFormLanguage] = useState('Java')
   const [formTopK, setFormTopK] = useState('3')
   const [formThreshold, setFormThreshold] = useState('70')
   const [formDueDate, setFormDueDate] = useState('')
   const [formDueTime, setFormDueTime] = useState('')
-
   const [activeTab, setActiveTab] = useState('assignments')
-
-  // Review queue (submissions)
   const [submissions, setSubmissions] = useState([])
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
   const [submissionsError, setSubmissionsError] = useState('')
-
-  // Analytics data
   const [analytics, setAnalytics] = useState({
     metrics: null,
     priorityCases: [],
@@ -118,35 +68,31 @@ export default function InstructorDashboard() {
   })
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsError, setAnalyticsError] = useState('')
-
-  // Privacy mode (masked or revealed)
   const [privacyMode, setPrivacyMode] = useState(getInitialPrivacyMode)
-
-  // Selected repositories for filtering
   const [selectedRepositories, setSelectedRepositories] = useState(['current'])
 
-  /*
-    Save privacy mode whenever it changes
-  */
   useEffect(() => {
     persistPrivacyMode(privacyMode)
   }, [privacyMode])
 
-  /*
-    Load courses when user logs in
-  */
   useEffect(() => {
-    let ignore = false // prevents updating state if component unmounts
+    let ignore = false
 
     fetchInstructorCourses(user?.id)
       .then((data) => {
-        if (!ignore) setCourses(data)
+        if (!ignore) {
+          setCourses(data)
+        }
       })
       .catch((error) => {
-        if (!ignore) console.error(error)
+        if (!ignore) {
+          console.error(error)
+        }
       })
       .finally(() => {
-        if (!ignore) setLoading(false)
+        if (!ignore) {
+          setLoading(false)
+        }
       })
 
     return () => {
@@ -154,9 +100,6 @@ export default function InstructorDashboard() {
     }
   }, [user?.id])
 
-  /*
-    Load assignments when course is selected
-  */
   useEffect(() => {
     if (!selectedCourse) return
 
@@ -164,7 +107,9 @@ export default function InstructorDashboard() {
 
     fetchInstructorAssignments(selectedCourse.course_id)
       .then((data) => {
-        if (!ignore) setAssignments(sortAssignments(data))
+        if (!ignore) {
+          setAssignments(sortAssignments(data))
+        }
       })
       .catch((error) => {
         if (!ignore) {
@@ -173,7 +118,9 @@ export default function InstructorDashboard() {
         }
       })
       .finally(() => {
-        if (!ignore) setAssignmentsLoading(false)
+        if (!ignore) {
+          setAssignmentsLoading(false)
+        }
       })
 
     return () => {
@@ -181,9 +128,6 @@ export default function InstructorDashboard() {
     }
   }, [selectedCourse])
 
-  /*
-    Load review queue (student submissions)
-  */
   useEffect(() => {
     if (!selectedCourse) return
 
@@ -203,7 +147,9 @@ export default function InstructorDashboard() {
         }
       })
       .finally(() => {
-        if (!ignore) setSubmissionsLoading(false)
+        if (!ignore) {
+          setSubmissionsLoading(false)
+        }
       })
 
     return () => {
@@ -211,9 +157,6 @@ export default function InstructorDashboard() {
     }
   }, [selectedCourse])
 
-  /*
-    Load analytics data
-  */
   useEffect(() => {
     if (!selectedCourse) return
 
@@ -224,12 +167,8 @@ export default function InstructorDashboard() {
         if (!ignore) {
           setAnalytics({
             metrics: data.metrics ?? null,
-            priorityCases: Array.isArray(data.priorityCases)
-              ? data.priorityCases
-              : [],
-            languageCounts: Array.isArray(data.languageCounts)
-              ? data.languageCounts
-              : [],
+            priorityCases: Array.isArray(data.priorityCases) ? data.priorityCases : [],
+            languageCounts: Array.isArray(data.languageCounts) ? data.languageCounts : [],
           })
         }
       })
@@ -245,7 +184,9 @@ export default function InstructorDashboard() {
         }
       })
       .finally(() => {
-        if (!ignore) setAnalyticsLoading(false)
+        if (!ignore) {
+          setAnalyticsLoading(false)
+        }
       })
 
     return () => {
@@ -253,13 +194,8 @@ export default function InstructorDashboard() {
     }
   }, [selectedCourse])
 
-  /*
-    When user selects a course
-  */
   const handleCourseSelection = (course) => {
     setSelectedCourse(course)
-
-    // Reset UI state
     setEditingAssignment(null)
     setAssignmentsLoading(Boolean(course))
     setSubmissionsLoading(Boolean(course))
@@ -267,7 +203,6 @@ export default function InstructorDashboard() {
     setSubmissionsError('')
     setAnalyticsError('')
 
-    // If no course → clear everything
     if (!course) {
       setAssignments([])
       setSubmissions([])
@@ -279,9 +214,6 @@ export default function InstructorDashboard() {
     }
   }
 
-  /*
-    Reset form fields
-  */
   const resetAssignmentForm = () => {
     setFormName('')
     setFormLanguage('Java')
@@ -291,34 +223,63 @@ export default function InstructorDashboard() {
     setFormDueTime('')
   }
 
-  /*
-    Submit form (create or update assignment)
-  */
+  const openCreateAssignmentForm = () => {
+    setEditingAssignment('create')
+    resetAssignmentForm()
+  }
+
+  const openEditAssignmentForm = (assignment) => {
+    setEditingAssignment(assignment)
+    setFormName(assignment.name)
+    setFormLanguage(assignment.language)
+    setFormTopK(String(assignment.top_k))
+    setFormThreshold(String(assignment.threshold))
+
+    const dueDate = new Date(assignment.due_date)
+    setFormDueDate(dueDate.toISOString().slice(0, 10))
+    setFormDueTime(dueDate.toISOString().slice(11, 16))
+  }
+
+  const handleCourseSelectChange = (event) => {
+    const nextCourse =
+      courses.find((course) => String(course.course_id) === event.target.value) ?? null
+    handleCourseSelection(nextCourse)
+  }
+
+  const handleToggleRepositoryScope = (scopeId) => {
+    setSelectedRepositories((previous) => {
+      const exists = previous.includes(scopeId)
+      if (exists) {
+        return previous.length === 1 ? previous : previous.filter((item) => item !== scopeId)
+      }
+
+      return [...previous, scopeId]
+    })
+  }
+
   const handleFormSubmit = async () => {
     if (!formName || !formDueDate || !formDueTime || !selectedCourse) {
-      window.alert('Please fill in required fields.')
+      window.alert('Please fill in the assignment name, due date, and due time.')
       return
     }
 
     const due_date = `${formDueDate}T${formDueTime}:00Z`
+    const top_k = Number(formTopK)
+    const threshold = Number(formThreshold)
 
     try {
       if (editingAssignment === 'create') {
-        // CREATE
         const createdAssignment = await createInstructorAssignment({
           courseId: selectedCourse.course_id,
           name: formName,
           language: formLanguage,
           due_date,
-          top_k: Number(formTopK),
-          threshold: Number(formThreshold),
+          top_k,
+          threshold,
         })
 
-        setAssignments((prev) =>
-          sortAssignments([...prev, createdAssignment])
-        )
+        setAssignments((previous) => sortAssignments([...previous, createdAssignment]))
       } else {
-        // UPDATE
         const updatedAssignment = await updateInstructorAssignment({
           assignmentRunId: editingAssignment.assignment_run_id,
           assignId: editingAssignment.assign_id,
@@ -326,13 +287,13 @@ export default function InstructorDashboard() {
           name: formName,
           language: formLanguage,
           due_date,
-          top_k: Number(formTopK),
-          threshold: Number(formThreshold),
+          top_k,
+          threshold,
         })
 
-        setAssignments((prev) =>
+        setAssignments((previous) =>
           sortAssignments(
-            prev.map((item) =>
+            previous.map((item) =>
               item.assignment_run_id === updatedAssignment.assignment_run_id
                 ? updatedAssignment
                 : item
@@ -344,24 +305,37 @@ export default function InstructorDashboard() {
       setEditingAssignment(null)
     } catch (error) {
       console.error(error)
-      window.alert('Failed to save assignment.')
+      window.alert(error.message || 'Failed to save assignment.')
     }
   }
 
-  /*
-    Compute stats efficiently (only when assignments change)
-  */
-  const assignmentStats = useMemo(() => ({
-    total: assignments.length,
-    uniqueAssignments: new Set(assignments.map((a) => a.assign_id)).size,
-    nextDue: getNextDueLabel(assignments),
-    topLanguage: getLanguageBreakdown(assignments),
-  }), [assignments])
+  const handleDeleteAssignment = async (assignmentRunId) => {
+    const confirmed = window.confirm('Are you sure you want to delete this assignment run?')
+    if (!confirmed) return
 
-  /*
-    UI RENDERING STARTS HERE
-  */
-  
+    try {
+      await deleteInstructorAssignment({
+        assignmentRunId,
+        courseId: selectedCourse?.course_id,
+      })
+      setAssignments((previous) =>
+        previous.filter((item) => item.assignment_run_id !== assignmentRunId)
+      )
+    } catch (error) {
+      console.error(error)
+      window.alert(error.message || 'Failed to delete assignment.')
+    }
+  }
+
+  const assignmentStats = useMemo(
+    () => ({
+      total: assignments.length,
+      uniqueAssignments: new Set(assignments.map((item) => item.assign_id)).size,
+      nextDue: getNextDueLabel(assignments),
+      topLanguage: getLanguageBreakdown(assignments),
+    }),
+    [assignments]
+  )
 
   return (
     <div className="dashboard instructor-shell">
