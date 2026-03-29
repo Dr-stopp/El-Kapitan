@@ -1,36 +1,56 @@
-import { useState, useRef } from 'react'
-import { supabase } from '../lib/supabase'
-
-const ACCEPTED_EXTENSIONS = ['.zip', '.c', '.cpp', '.java']
+import { useRef, useState } from 'react'
+import {
+  UPLOAD_OPTIONS,
+  uploadSubmissionAsset,
+  validateSubmissionFile,
+} from '../lib/submissionUpload'
 
 export default function Submit() {
   const [assignmentKey, setAssignmentKey] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
   const [file, setFile] = useState(null)
+  const [submissionKind, setSubmissionKind] = useState('file')
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef(null)
 
-  const validateFile = (f) => {
-    if (!f) return 'Please select a file.'
-    const ext = '.' + f.name.split('.').pop().toLowerCase()
-    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-      return `Invalid file type. Accepted: ${ACCEPTED_EXTENSIONS.join(', ')}`
+  const uploadOption = UPLOAD_OPTIONS[submissionKind]
+
+  const resetFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
-    return null
   }
 
-  const handleFileChange = (f) => {
-    const err = validateFile(f)
+  const handleFileChange = (f, kind = submissionKind) => {
+    const err = validateSubmissionFile(f, kind)
     if (err) {
       setError(err)
       setFile(null)
+      resetFileInput()
     } else {
       setError('')
       setFile(f)
+    }
+  }
+
+  const handleSubmissionKindChange = (nextKind) => {
+    if (nextKind === submissionKind) return
+
+    setSubmissionKind(nextKind)
+    setError('')
+    setSuccess('')
+
+    if (file) {
+      const nextError = validateSubmissionFile(file, nextKind)
+      if (nextError) {
+        setFile(null)
+        resetFileInput()
+      }
     }
   }
 
@@ -48,7 +68,7 @@ export default function Submit() {
     setSuccess('')
 
     // Validate file
-    const fileErr = validateFile(file)
+    const fileErr = validateSubmissionFile(file, submissionKind)
     if (fileErr) {
       setError(fileErr)
       return
@@ -57,46 +77,29 @@ export default function Submit() {
     setLoading(true)
 
     try {
-      // Validate assignment key exists
-      const { data: assignmentRun, error: lookupError } = await supabase
-        .from('assignment_runs')
-        .select('assignment_run_id, course_id, assign_id')
-        .eq('assignment_run_id', assignmentKey)
-        .single()
-
-      if (lookupError || !assignmentRun) {
-        setError('Invalid assignment key. Please check the key and try again.')
-        setLoading(false)
-        return
-      }
-
-      // Build a unique storage path
-      const timestamp = Date.now()
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-      const storagePath = `submissions/${assignmentKey}/${firstName}_${lastName}_${timestamp}_${safeName}`
-
-      // Upload file to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('Submissions')
-        .upload(storagePath, file)
-
-      if (uploadError) {
-        setError('File upload failed. Please try again.')
-        setLoading(false)
-        return
-      }
+      await uploadSubmissionAsset({
+        assignmentRunId: assignmentKey,
+        firstName,
+        lastName,
+        email,
+        file,
+        submissionKind,
+      })
 
       setSuccess(
-        'Your submission was uploaded successfully! Your instructor will review the results.'
+        submissionKind === 'repository'
+          ? 'Your repository archive was uploaded successfully and saved to the database.'
+          : 'Your submission was uploaded successfully and saved to the database.'
       )
       // Reset form
       setAssignmentKey('')
       setFirstName('')
       setLastName('')
+      setEmail('')
       setFile(null)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    } catch {
-      setError('An unexpected error occurred. Please try again.')
+      resetFileInput()
+    } catch (error) {
+      setError(error.message || 'An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -106,7 +109,8 @@ export default function Submit() {
     <div className="max-w-2xl mx-auto px-4 py-12 sm:py-16">
       <h1 className="text-3xl font-bold text-primary mb-2">Submit Your Work</h1>
       <p className="text-text-muted mb-8">
-        Enter the assignment key provided by your instructor and upload your code file.
+        Enter the assignment key provided by your instructor and upload either a code file or a
+        zipped repository archive.
       </p>
 
       {error && (
@@ -170,9 +174,50 @@ export default function Submit() {
           </div>
         </div>
 
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium mb-1">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full border border-warm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+            placeholder="student@school.edu"
+          />
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Upload Type</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.entries(UPLOAD_OPTIONS).map(([key, option]) => {
+                const active = key === submissionKind
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                      active
+                        ? 'border-primary bg-accent/40 text-primary'
+                        : 'border-warm hover:border-primary/50'
+                    }`}
+                    onClick={() => handleSubmissionKindChange(key)}
+                  >
+                    <strong className="block">{option.label}</strong>
+                    <span className="text-sm text-text-muted">{option.helperText}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
         {/* File upload */}
         <div>
-          <label className="block text-sm font-medium mb-1">File Upload</label>
+          <label className="block text-sm font-medium mb-1">{uploadOption.label}</label>
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
               dragActive
@@ -199,17 +244,21 @@ export default function Submit() {
                 <svg className="w-10 h-10 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p className="font-medium">Drag & drop your file here</p>
+                <p className="font-medium">
+                  {submissionKind === 'repository'
+                    ? 'Drag & drop your repository archive here'
+                    : 'Drag & drop your file here'}
+                </p>
                 <p className="text-sm mt-1">or click to browse</p>
                 <p className="text-xs mt-2 opacity-70">
-                  Accepted: .zip, .c, .cpp, .java
+                  Accepted: {uploadOption.acceptedExtensions.join(', ')}
                 </p>
               </div>
             )}
             <input
               ref={fileInputRef}
               type="file"
-              accept=".zip,.c,.cpp,.java"
+              accept={uploadOption.acceptAttr}
               onChange={(e) => handleFileChange(e.target.files?.[0])}
               className="hidden"
             />
@@ -221,7 +270,7 @@ export default function Submit() {
           disabled={loading}
           className="w-full bg-primary text-white font-semibold py-3 rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
         >
-          {loading ? 'Uploading...' : 'Submit'}
+          {loading ? 'Uploading...' : uploadOption.submitLabel}
         </button>
       </form>
     </div>

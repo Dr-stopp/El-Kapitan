@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 
 export default function Navbar() {
   const { user, signOut } = useAuth()
@@ -17,7 +17,7 @@ export default function Navbar() {
     <nav className="bg-primary text-white shadow-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="text-xl font-bold tracking-tight hover:opacity-90">
+          <Link to={user ? '/dashboard' : '/'} className="text-xl font-bold tracking-tight hover:opacity-90">
             El Kapitan
           </Link>
 
@@ -29,13 +29,7 @@ export default function Navbar() {
             {user ? (
               <>
                 <Link to="/dashboard" className="hover:text-accent transition-colors">
-                  Dashboard
-                </Link>
-                <Link to="/courses" className="hover:text-accent transition-colors">
-                  Courses
-                </Link>
-                <Link to="/compare" className="hover:text-accent transition-colors">
-                  Results
+                  Instructor Dashboard
                 </Link>
                 <button
                   onClick={handleSignOut}
@@ -83,13 +77,7 @@ export default function Navbar() {
             {user ? (
               <>
                 <Link to="/dashboard" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-md hover:bg-white/15">
-                  Dashboard
-                </Link>
-                <Link to="/courses" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-md hover:bg-white/15">
-                  Courses
-                </Link>
-                <Link to="/compare" onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-md hover:bg-white/15">
-                  Results
+                  Instructor Dashboard
                 </Link>
                 <button
                   onClick={handleSignOut}
