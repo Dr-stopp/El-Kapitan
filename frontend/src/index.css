@@ -15,6 +15,18 @@
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+:root {
+  --el-bg: #F0F0DB;
+  --el-surface: #ffffff;
+  --el-surface-muted: #f7f2e1;
+  --el-border: #E1D9BC;
+  --el-accent: #E0FBFC;
+  --el-primary: #2B68A1;
+  --el-primary-dark: #1e4f7d;
+  --el-text: #2d2d2d;
+  --el-text-muted: #6b6b6b;
+}
+
 body {
   margin: 0;
   background-color: var(--color-background);

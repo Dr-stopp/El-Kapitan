@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 
 export default function Signup() {
   const { signUp } = useAuth()
@@ -10,11 +10,13 @@ export default function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setSuccess('')
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters.')
@@ -22,13 +24,15 @@ export default function Signup() {
     }
 
     setLoading(true)
-    const { error: authError } = await signUp(email, password, firstName, lastName)
+    const { error: authError, user } = await signUp(email, password, firstName, lastName)
     setLoading(false)
 
     if (authError) {
       setError(authError.message)
-    } else {
+    } else if (user) {
       navigate('/dashboard')
+    } else {
+      setSuccess('Account created. Confirm your email if required, then sign in.')
     }
   }
 
@@ -43,6 +47,12 @@ export default function Signup() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-error rounded-lg px-4 py-3 mb-4 text-sm">
             {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-success rounded-lg px-4 py-3 mb-4 text-sm">
+            {success}
           </div>
         )}
 

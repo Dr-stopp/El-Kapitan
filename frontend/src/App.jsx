@@ -1,13 +1,14 @@
-import { Routes, Route } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Submit from './pages/Submit'
-import Dashboard from './pages/Dashboard'
-import Courses from './pages/Courses'
-import Compare from './pages/Compare'
+import InstructorDashboard from './instructor/InstructorDashboard'
+import SubmissionComparePage from './instructor/SubmissionComparePage'
+import SubmissionReportPage from './instructor/SubmissionReportPage'
+import './instructor/instructor.css'
 
 export default function App() {
   return (
@@ -21,7 +22,7 @@ export default function App() {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <InstructorDashboard />
             </ProtectedRoute>
           }
         />
@@ -29,7 +30,7 @@ export default function App() {
           path="/courses"
           element={
             <ProtectedRoute>
-              <Courses />
+              <Navigate to="/dashboard" replace />
             </ProtectedRoute>
           }
         />
@@ -37,7 +38,23 @@ export default function App() {
           path="/compare"
           element={
             <ProtectedRoute>
-              <Compare />
+              <Navigate to="/dashboard" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/report/:submissionId"
+          element={
+            <ProtectedRoute>
+              <SubmissionReportPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/compare/:submissionId"
+          element={
+            <ProtectedRoute>
+              <SubmissionComparePage />
             </ProtectedRoute>
           }
         />

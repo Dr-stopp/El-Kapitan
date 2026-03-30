@@ -1,0 +1,731 @@
+.instructor-shell {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.instructor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.instructor-title {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.6rem);
+  line-height: 1.05;
+  color: var(--el-text);
+}
+
+.instructor-subtitle {
+  margin: 10px 0 0;
+  color: var(--el-text-muted);
+  max-width: 760px;
+  line-height: 1.6;
+}
+
+.instructor-tabs {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--el-border);
+  box-shadow: 0 12px 28px rgba(43, 104, 161, 0.08);
+}
+
+.tab-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--el-text-muted);
+  padding: 10px 16px;
+  border-radius: 14px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.tab-btn:hover {
+  background: rgba(224, 251, 252, 0.9);
+  color: var(--el-primary);
+}
+
+.tab-btn.active {
+  background: var(--el-primary);
+  color: #fff;
+  border-color: var(--el-primary);
+}
+
+.teacherPageShell,
+.scopeSection,
+.assignment-form-shell,
+.detailsStack,
+.priorityList,
+.languageStats,
+.assignment-form,
+.course-actions-row,
+.form-action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.teacherDashboardGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.95fr);
+  gap: 20px;
+}
+
+.teacherMainColumn,
+.teacherSideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.teacherCard,
+.teacherStatCard {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--el-border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 14px 32px rgba(43, 104, 161, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.workspaceControlCard,
+.offeringStatsGrid .teacherStatCard {
+  background:
+    radial-gradient(360px 180px at 100% 0%, rgba(224, 251, 252, 0.95), transparent 70%),
+    rgba(255, 255, 255, 0.92);
+}
+
+.teacherHero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.teacherHeroActions,
+.selectedActions,
+.modeSwitch,
+.assignment-card-right {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.teacherEyebrow,
+.form-label,
+.toolbarField label,
+.teacherStatLabel {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--el-text-muted);
+}
+
+.teacherHeroTitle {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  line-height: 1.1;
+  color: var(--el-text);
+}
+
+.teacherHeroText,
+.teacherStatNote,
+.teacherSectionMeta,
+.assignment-preview,
+.priorityMeta,
+.submissionSecondary,
+.detailRow span,
+.scopeChip span {
+  color: var(--el-text-muted);
+  line-height: 1.6;
+}
+
+.teacherButton,
+.btn-new-assignment,
+.btn-upload,
+.btn-edit,
+.btn-delete,
+.btn-delete-course,
+.btn-form-submit,
+.scopeChip,
+.course-card,
+.modeBtn {
+  cursor: pointer;
+  font: inherit;
+}
+
+.teacherButton,
+.btn-new-assignment,
+.btn-form-submit {
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  font-weight: 700;
+}
+
+.teacherButton:hover,
+.btn-new-assignment:hover,
+.btn-upload:hover,
+.btn-form-submit:hover,
+.btn-edit:hover,
+.btn-delete:hover,
+.scopeChip:hover,
+.course-card:hover {
+  transform: translateY(-1px);
+}
+
+.teacherButtonPrimary,
+.btn-new-assignment,
+.btn-form-submit {
+  background: var(--el-primary);
+  color: #fff;
+}
+
+.btn-upload {
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(43, 104, 161, 0.18);
+  background: rgba(224, 251, 252, 0.92);
+  color: var(--el-primary);
+}
+
+.form-action-row {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.course-actions-row-inline {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.teacherButtonSecondary {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: var(--el-border);
+  color: var(--el-text);
+}
+
+.teacherButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.teacherStatGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.teacherStatValue {
+  margin: 10px 0 0;
+  font-size: clamp(1.4rem, 2.8vw, 2.3rem);
+  line-height: 1.1;
+  color: var(--el-text);
+}
+
+.offeringStatValueSmall {
+  font-size: clamp(1rem, 1.6vw, 1.35rem);
+}
+
+.teacherSectionHeader {
+  margin-bottom: 8px;
+}
+
+.teacherSectionHeaderInline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.teacherSectionHeader h3,
+.teacherSectionHeaderInline h2,
+.teacherSectionHeaderInline h3 {
+  margin: 0;
+  color: var(--el-text);
+}
+
+.workspaceControlGrid,
+.form-grid,
+.toolbarGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.toolbarField,
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolbarFieldWide {
+  grid-column: 1 / -1;
+}
+
+.teacherInput,
+.teacherSelect,
+.form-input,
+.toolbarField input,
+.toolbarField select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--el-border);
+  background: #fff;
+  color: var(--el-text);
+  font: inherit;
+  outline: none;
+}
+
+.teacherInput:focus,
+.teacherSelect:focus,
+.form-input:focus,
+.toolbarField input:focus,
+.toolbarField select:focus {
+  border-color: var(--el-primary);
+  box-shadow: 0 0 0 3px rgba(43, 104, 161, 0.16);
+}
+
+.modeSwitch {
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(224, 251, 252, 0.7);
+  border: 1px solid var(--el-border);
+}
+
+.modeBtn {
+  border: none;
+  background: transparent;
+  color: var(--el-text-muted);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.modeBtn.active {
+  background: var(--el-primary);
+  color: #fff;
+}
+
+.scopeChipGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.scopeChip {
+  text-align: left;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--el-border);
+  background: rgba(255, 255, 255, 0.82);
+  display: grid;
+  gap: 8px;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.scopeChip.active {
+  border-color: var(--el-primary);
+  background: rgba(224, 251, 252, 0.96);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-weight: 600;
+  color: var(--el-text-muted);
+}
+
+.breadcrumb-link {
+  color: var(--el-primary);
+  cursor: pointer;
+}
+
+.breadcrumb-current {
+  color: var(--el-text);
+}
+
+.breadcrumb-separator {
+  color: var(--el-text-muted);
+}
+
+.course-list,
+.assignment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.course-card,
+.assignment-card {
+  width: 100%;
+  border: 1px solid var(--el-border);
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 20px;
+  padding: 20px;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.course-card {
+  text-align: left;
+}
+
+.course-empty-state,
+.assignment-empty-state {
+  align-items: flex-start;
+}
+
+.course-empty-state h3,
+.assignment-empty-state h3 {
+  margin: 0;
+  color: var(--el-text);
+}
+
+.course-empty-state p,
+.assignment-empty-state p {
+  margin: 0;
+  color: var(--el-text-muted);
+}
+
+.course-card h2,
+.assignment-name,
+.priorityTitle {
+  margin: 0;
+  color: var(--el-text);
+}
+
+.assignment-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.assignment-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assignment-number,
+.assignment-due {
+  margin: 0;
+}
+
+.assignment-number {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--el-text-muted);
+}
+
+.status-visible,
+.status-hidden,
+.statusBadge,
+.similarityPill,
+.riskPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.status-visible {
+  background: rgba(224, 251, 252, 0.95);
+  color: var(--el-primary);
+}
+
+.status-hidden,
+.statusBadge {
+  background: rgba(225, 217, 188, 0.6);
+  color: var(--el-text);
+}
+
+.similarityPill,
+.status-needs-review,
+.risk-medium {
+  background: rgba(255, 211, 107, 0.28);
+  color: #8a5a00;
+}
+
+.status-flagged,
+.risk-high {
+  background: rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+}
+
+.status-clear,
+.risk-low {
+  background: rgba(34, 197, 94, 0.16);
+  color: #166534;
+}
+
+.status-complete {
+  background: rgba(34, 197, 94, 0.16);
+  color: #166534;
+}
+
+.status-processing {
+  background: rgba(255, 211, 107, 0.28);
+  color: #8a5a00;
+}
+
+.status-failed {
+  background: rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+}
+
+.status-queued,
+.status-pending-review {
+  background: rgba(225, 217, 188, 0.6);
+  color: var(--el-text);
+}
+
+.btn-edit,
+.btn-delete {
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--el-border);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--el-text);
+}
+
+.btn-delete {
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #b91c1c;
+}
+
+.btn-delete-course {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.btn-new-assignment:disabled,
+.btn-upload:disabled,
+.btn-edit:disabled,
+.btn-delete:disabled,
+.btn-delete-course:disabled,
+.btn-form-submit:disabled,
+.scopeChip:disabled,
+.course-card:disabled,
+.modeBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.teacherEmptyState,
+.teacherEmptyInline {
+  color: var(--el-text-muted);
+}
+
+.upload-feedback {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  line-height: 1.5;
+}
+
+.upload-feedback-error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+}
+
+.upload-feedback-success {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.2);
+  color: #166534;
+}
+
+.upload-helper-text {
+  margin: 0;
+  color: var(--el-text-muted);
+  line-height: 1.5;
+}
+
+.priorityItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--el-border);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.priorityScore {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--el-text);
+  white-space: nowrap;
+}
+
+.reviewTableWrap,
+.codePane {
+  overflow: auto;
+}
+
+.reviewTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.reviewTable th,
+.reviewTable td {
+  padding: 14px 10px;
+  border-bottom: 1px solid rgba(225, 217, 188, 0.85);
+  text-align: left;
+}
+
+.reviewTable th {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--el-text-muted);
+}
+
+.reviewTable tbody tr {
+  cursor: pointer;
+}
+
+.reviewRowActive {
+  background: rgba(224, 251, 252, 0.7);
+}
+
+.submissionPrimary {
+  font-weight: 700;
+  color: var(--el-text);
+}
+
+.detailRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(225, 217, 188, 0.85);
+}
+
+.detailRow strong {
+  color: var(--el-text);
+  text-align: right;
+}
+
+.detailRowBlock {
+  display: block;
+}
+
+.detailRowBlock p {
+  margin: 8px 0 0;
+  color: var(--el-text);
+}
+
+.languageRow {
+  display: grid;
+  gap: 8px;
+}
+
+.languageTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--el-text);
+}
+
+.languageBarTrack {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(225, 217, 188, 0.7);
+  overflow: hidden;
+}
+
+.languageBarFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--el-primary), #67b3c4);
+}
+
+.compareGridExpanded {
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 1fr);
+}
+
+.compareSideColumn {
+  min-width: 0;
+}
+
+.codePane {
+  max-height: 70vh;
+  border-radius: 16px;
+  border: 1px solid var(--el-border);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.codeLine {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(225, 217, 188, 0.65);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 0.9rem;
+}
+
+.codeLine.matched {
+  background: rgba(224, 251, 252, 0.82);
+}
+
+.codeLineNumber {
+  color: var(--el-text-muted);
+  text-align: right;
+  user-select: none;
+}
+
+.codeLineText {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 920px) {
+  .teacherDashboardGrid,
+  .compareGridExpanded,
+  .workspaceControlGrid,
+  .form-grid,
+  .toolbarGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .teacherHero,
+  .assignment-card {
+    flex-direction: column;
+  }
+}
