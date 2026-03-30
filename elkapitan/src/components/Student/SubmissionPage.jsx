@@ -5,7 +5,6 @@
  *   - Lets the student pick multiple files
  *   - Zips them into a single .zip file in the browser using JSZip
  *   - Uploads the zip to Supabase Storage
- *   - Upserts a row in the submissions table (anonymous_token, file_path, status)
  *   - Calls onSubmissionSuccess callback so StudentDashboard can update the assignment card
  *
  * Props received:
@@ -98,13 +97,8 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
         // Guard — do nothing if no files selected
         if (selectedFiles.length === 0) return;
 
-        // ── Step 1: Generate anonymous token ────────────────────────────────
-        // crypto.randomUUID() = UUID.randomUUID() in Java
-        // This is what Spring Boot will receive instead of the real student_id
-        const anonymousToken = crypto.randomUUID();
 
-
-        // ── Step 2: Zip all selected files in the browser ───────────────────
+        // ── Step 1: Zip all selected files in the browser ───────────────────
         // JSZip works like ZipOutputStream in Java
         // IN:  selectedFiles[] — array of File objects
         // OUT: zipBlob — a Blob (raw binary data, like byte[]) representing the zip
@@ -123,7 +117,7 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
         const zipBlob = await zip.generateAsync({ type: 'blob' });
 
 
-        // ── Step 3: Upload zip to Supabase Storage ───────────────────────────
+        // ── Step 2: Upload zip to Supabase Storage ───────────────────────────
         // Path: submissions/studentId/deploymentId/submission.zip
         // Using the same path every time = upsert: true will overwrite on resubmit
         const filePath = `${user.id}/${selectedAssignment.deployment_id}/submission.zip`;
@@ -142,7 +136,7 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
         }
 
 
-        // ── Step 4: Upsert row in submissions table ──────────────────────────
+        // ── Step 3: Upsert row in submissions table ──────────────────────────
         // upsert = INSERT if no row exists, UPDATE if row already exists
         // onConflict tells Supabase which columns define "already exists"
         // equivalent to: INSERT ... ON CONFLICT (student_id, deployment_id) DO UPDATE SET ...
@@ -154,12 +148,11 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
                 {
                     student_id:      user.id,                          // real identity — stays in YOUR db
                     deployment_id:   selectedAssignment.deployment_id,
-                    anonymous_token: anonymousToken,                   // new token every resubmit
+                    
                     file_path:       filePath,                         // path in Supabase Storage
                     submitted_at:    new Date().toISOString(),         // current timestamp
                     status:          'pending',                        // instructor hasn't reviewed yet
-                    grade:           null,                             // not graded yet
-                    similarity_report: null,                           // not processed yet
+                    
                 },
                 { onConflict: 'student_id, deployment_id' } // update existing row on resubmit
             );
@@ -171,7 +164,7 @@ export default function SubmissionPage({ user, selectedAssignment, selectedCours
         }
 
 
-        // ── Step 5: Notify parent and update UI ──────────────────────────────
+        // ── Step 4: Notify parent and update UI ──────────────────────────────
         // Call the callback StudentDashboard passed down as a prop
         // This flips the assignment card from 'Not Submitted' to 'Submitted'
         // Like calling a listener.onComplete() in Java
