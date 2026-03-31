@@ -1,25 +1,30 @@
 <!DOCTYPE html>
 <html>
 <body>
+<h1>Insert Submission</h1>
 <input type="text" id="student" placeholder="Student ID">
 <br>
-<input type="text" id="assignment" placeholder="Assignment ID">
-<br>
-<input type="text" id="course" placeholder="Course">
+<input type="text" id="assignment" placeholder="Assignment Run ID">
 <br>
 <input type="file" id="submission">
 <br>
 <button onclick="send()">Submit</button>
+<br><br>
+<h1>Generate Results</h1>
+<input type = "text" id = "assignmentRun" placeholder="Assignment Run ID">
+<br>
+<input type = "text" id = "repository" placeholder="RepositoryID">
+<br>
+<button onclick = "result()"> Results </button>
 
 <script>
     async function send() {
       const file = document.getElementById("submission").files[0];
       const student = document.getElementById("student").value.trim();
       const assignment = document.getElementById("assignment").value.trim();
-      const course = document.getElementById("course").value.trim();
 
       if (!file) return console.log("No file selected");
-      if (!student || !assignment || !course) {
+      if (!student || !assignment) {
         return console.log("Fill student, assignment, and course");
       }
 
@@ -27,7 +32,6 @@
       formData.append("file", file, file.name);
       formData.append("student", student);
       formData.append("assignment", assignment);
-      formData.append("course", course);
 
       const res = await fetch("http://localhost:8080/submit", {
         method: "POST",
@@ -37,5 +41,27 @@
       console.log(res.status, await res.text());
     }
   </script>
+
+<script>
+  async function result() {
+    const assignmentRun = document.getElementById("assignmentRun").value.trim();
+    const repository = document.getElementById("repository").value.trim();
+    if (!assignmentRun || !repository) {
+        return console.log("Fill assignment run and repository");
+      }
+    const formData = new FormData();
+      formData.append("repository", repository);
+      formData.append("assignment", assignmentRun);
+
+     const res = await fetch("http://localhost:8080/result", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log(res.status, await res.text());
+  }
+</script>
+
+
 </body>
 </html>

@@ -18,6 +18,28 @@ import java.nio.file.Path;
 
 public class zipProcessor {
 
+    public static List<MultipartFile> createZipList(MultipartFile zipFile) throws IOException {
+        List<MultipartFile> zipFiles = new ArrayList<>();
+        try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream(), StandardCharsets.UTF_8)) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                if (!entry.isDirectory() && "zip".equalsIgnoreCase(getExtension(entry.getName()))) {
+                    byte[] entryBytes = zis.readAllBytes();
+                    String originalName = Paths.get(entry.getName()).getFileName().toString();
+                    MultipartFile nestedZip = new MockMultipartFile(
+                            originalName,
+                            originalName,
+                            "application/zip",
+                            entryBytes
+                    );
+                    zipFiles.add(nestedZip);
+                }
+                zis.closeEntry();
+            }
+        }
+        return zipFiles;
+    }
+
     /**
      * Reads a ZIP from MultipartFile, concatenates files with the same extension as
      * the first file found, and writes output to ./temp/combined.<ext>

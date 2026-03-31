@@ -1,6 +1,5 @@
 package server;
 
-import Tokenizer.src.PlagiarismChecker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -10,7 +9,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.OffsetDateTime;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.UUID;
 
 @RestController
 public class SubmitController {
@@ -30,34 +33,44 @@ public class SubmitController {
     public ResponseEntity<String> submit(
             @RequestParam("file") MultipartFile file,
             @RequestParam("student") long student,
-            @RequestParam("assignment") long assignment,
-            @RequestParam("course") String course
+            @RequestParam("assignment") String assignment
     ) {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body("No file uploaded");
         }
-
         try {
-            log.info("Submit start student={} assignment={} course={}", student, assignment, course);
+            log.info("Submit start student={} assignment={} course={}", student, assignment);
+            String course = dbHandler.getCourse(UUID.fromString(assignment));
+            if (course == null || course.isBlank()) {
+                log.warn("No course found for assignment_run_id={}", assignment);
+                return ResponseEntity.badRequest().body("Unknown assignment_run_id: " + assignment);
+            }
+            Path fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, student + "-" + assignment);
+            byte[] toUpload = Files.readAllBytes(fileToUpload);
+            String contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
 
-            String objectPath = storageService.upload(file, student, assignment, course, "Submissions");
+            String objectPath = storageService.uploadSubmission(toUpload, contentType, student, assignment, course,"Submissions");
             log.info("Upload ok path={}", objectPath);
 
-            long submissionID = dbHandler.generateSubmissionID();
-            log.info("Generated submissionID={}", submissionID);
-
+            boolean inserted = false;
             try {
-                dbHandler.insertSubmission(submissionID, OffsetDateTime.now(), assignment, student, objectPath);
+                dbHandler.insertSubmission(UUID.fromString(assignment), student, objectPath);
+                inserted = true;
             } catch (DataIntegrityViolationException dup) {
-                // duplicate submission row: ignore, but keep request successful
-                submissionID = dbHandler.getSubmissionID(objectPath);
-                dbHandler.clearResults(submissionID);
-                log.warn("Submission already exists for student={} assignment={}", student, assignment, dup);
+                String root = dup.getMostSpecificCause() != null
+                        ? dup.getMostSpecificCause().getMessage()
+                        : dup.getMessage();
+                String normalized = root == null ? "" : root.toLowerCase();
+                if (normalized.contains("duplicate") || normalized.contains("unique")) {
+                    // duplicate submission row: ignore, but keep request successful
+                    log.warn("Submission already exists for student={} assignment={}", student, assignment, dup);
+                } else {
+                    throw dup;
+                }
             }
-            log.info("DB insertSubmission ok id={}", submissionID);
-
-            results.generateResults(file, course, assignment, submissionID);
-            log.info("Results generated");
+            if (inserted) {
+                log.info("DB insertSubmission ok");
+            }
 
             return ResponseEntity.ok("Upload complete (Supabase: " + objectPath + ")");
         } catch (DataAccessException dae) {
@@ -69,5 +82,33 @@ public class SubmitController {
             return ResponseEntity.status(502).body("Upload failed: " + e.getMessage());
         }
 
+    }
+
+    @PostMapping(path = "/result", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<String> result(
+            @RequestParam("assignment") String assignmentRunID,
+            @RequestParam("repository") long repositoryID
+    ) throws IOException {
+        log.info("Results requested");
+        results.generateResults(UUID.fromString(assignmentRunID), repositoryID);
+        return null;
+    }
+
+    @PostMapping(path = "/repository", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<String> repository (
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("assignmentRun") String assignmentRun
+
+    ){
+        try {
+            List<MultipartFile> zipList = zipProcessor.createZipList(file);
+            for (MultipartFile f : zipList) {
+                zipProcessor.concatZipFromMultipartToTemp(f, f.getName());
+            }
+        } catch (IOException e) {
+            log.error(e.getMessage());
+        }
+
+        return null;
     }
 }
