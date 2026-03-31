@@ -179,6 +179,7 @@
 .teacherButton:hover,
 .btn-new-assignment:hover,
 .btn-upload:hover,
+.btn-export:hover,
 .btn-form-submit:hover,
 .btn-edit:hover,
 .btn-delete:hover,
@@ -194,7 +195,8 @@
   color: #fff;
 }
 
-.btn-upload {
+.btn-upload,
+.btn-export {
   padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid rgba(43, 104, 161, 0.18);
@@ -530,6 +532,7 @@
 
 .btn-new-assignment:disabled,
 .btn-upload:disabled,
+.btn-export:disabled,
 .btn-edit:disabled,
 .btn-delete:disabled,
 .btn-delete-course:disabled,

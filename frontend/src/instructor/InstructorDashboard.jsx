@@ -6,6 +6,7 @@ import {
   validateSubmissionFile,
 } from '../lib/submissionUpload'
 import {
+  buildAssignmentExportZip,
   createInstructorCourse,
   createInstructorAssignment,
   deleteInstructorAssignment,
@@ -81,6 +82,7 @@ export default function InstructorDashboard() {
   const [uploadError, setUploadError] = useState('')
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [uploadLoading, setUploadLoading] = useState(false)
+  const [exportingAssignmentId, setExportingAssignmentId] = useState(null)
   const [activeTab, setActiveTab] = useState('assignments')
   const [submissions, setSubmissions] = useState([])
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
@@ -513,6 +515,18 @@ export default function InstructorDashboard() {
     }
   }
 
+  const handleExportAssignment = async (assignment) => {
+    setExportingAssignmentId(assignment.assignment_run_id)
+    try {
+      await buildAssignmentExportZip(assignment)
+    } catch (error) {
+      console.error(error)
+      window.alert(error.message || 'Failed to export assignment data.')
+    } finally {
+      setExportingAssignmentId(null)
+    }
+  }
+
   const handleDeleteCourse = async () => {
     if (!selectedCourse) {
       return
@@ -868,6 +882,16 @@ export default function InstructorDashboard() {
                             onClick={() => openRepositoryUploadForm(item)}
                           >
                             Upload Repo
+                          </button>
+
+                          <button
+                            className="btn-export"
+                            onClick={() => handleExportAssignment(item)}
+                            disabled={exportingAssignmentId === item.assignment_run_id}
+                          >
+                            {exportingAssignmentId === item.assignment_run_id
+                              ? 'Exporting...'
+                              : 'Export'}
                           </button>
 
                           <button
