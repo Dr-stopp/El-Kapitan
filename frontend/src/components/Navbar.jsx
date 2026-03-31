@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
+import logo from '../assets/el-kapitan-logo-simple.svg'
 
 export default function Navbar() {
   const { user, signOut } = useAuth()
@@ -17,8 +18,8 @@ export default function Navbar() {
     <nav className="bg-primary text-white shadow-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
-          <Link to={user ? '/dashboard' : '/'} className="text-xl font-bold tracking-tight hover:opacity-90">
-            El Kapitan
+          <Link to={user ? '/dashboard' : '/'} className="hover:opacity-90">
+            <img src={logo} alt="El Kapitan" className="h-14 w-auto" />
           </Link>
 
           {/* Desktop nav */}

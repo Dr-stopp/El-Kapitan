@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="420" viewBox="0 0 1400 420">
+  <defs></defs>
+  <g>
+    <text
+      x="110"
+      y="265"
+      font-family="Verdana, Arial, sans-serif"
+      font-size="180"
+      font-weight="800"
+      letter-spacing="-2"
+      fill="#F7F3E6"
+      stroke="#1C4D87"
+      stroke-width="6"
+      paint-order="stroke fill"
+    >
+      El
+    </text>
+    <text
+      x="320"
+      y="265"
+      font-family="Verdana, Arial, sans-serif"
+      font-size="180"
+      font-weight="800"
+      letter-spacing="-2"
+      fill="#E8F6FF"
+      stroke="#1C4D87"
+      stroke-width="6"
+      paint-order="stroke fill"
+    >
+      Kapitan
+    </text>
+    <path
+      d="M120 328 C 338 306, 680 302, 1030 326"
+      fill="none"
+      stroke="#D6EEFA"
+      stroke-width="9"
+      stroke-linecap="round"
+    />
+    <path
+      d="M120 332 C 338 310, 680 306, 1030 330"
+      fill="none"
+      stroke="#1C4D87"
+      stroke-width="3"
+      stroke-linecap="round"
+    />
+  </g>
+</svg>
