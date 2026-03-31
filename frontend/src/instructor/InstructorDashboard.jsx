@@ -69,7 +69,7 @@ export default function InstructorDashboard() {
   const [assignmentsLoading, setAssignmentsLoading] = useState(false)
   const [editingAssignment, setEditingAssignment] = useState(null)
   const [formName, setFormName] = useState('')
-  const [formLanguage, setFormLanguage] = useState('Java')
+  const [formLanguage, setFormLanguage] = useState('java')
   const [formTopK, setFormTopK] = useState('3')
   const [formThreshold, setFormThreshold] = useState('70')
   const [formDueDate, setFormDueDate] = useState('')
@@ -244,7 +244,7 @@ export default function InstructorDashboard() {
 
   const resetAssignmentForm = () => {
     setFormName('')
-    setFormLanguage('Java')
+    setFormLanguage('java')
     setFormTopK('3')
     setFormThreshold('70')
     setFormDueDate('')
@@ -881,7 +881,7 @@ export default function InstructorDashboard() {
                         </div>
 
                         <div className="assignment-card-right">
-                          <span className="status-visible">{item.language}</span>
+                          <span className="status-visible">{item.language === 'cpp' ? 'C++' : item.language === 'java' ? 'Java' : item.language?.toUpperCase()}</span>
                           <span className="status-hidden">
                             Top K {item.top_k} | Threshold {item.threshold}%
                           </span>
@@ -962,9 +962,9 @@ export default function InstructorDashboard() {
                       value={formLanguage}
                       onChange={(event) => setFormLanguage(event.target.value)}
                     >
-                      <option value="Java">Java</option>
-                      <option value="C">C</option>
-                      <option value="C++">C++</option>
+                      <option value="java">Java</option>
+                      <option value="c">C</option>
+                      <option value="cpp">C++</option>
                     </select>
                   </div>
 

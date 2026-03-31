@@ -13,7 +13,7 @@ CREATE TABLE public.assignment_runs (
 CREATE TABLE public.assignments (
   assign_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   course_id bigint NOT NULL,
-  language text NOT NULL,
+  language text NOT NULL CHECK (language = ANY (ARRAY['java'::text, 'c'::text, 'cpp'::text])),
   name text NOT NULL,
   CONSTRAINT assignments_pkey PRIMARY KEY (assign_id),
   CONSTRAINT Assignments_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(course_id)
