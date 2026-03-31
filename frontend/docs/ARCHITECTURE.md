@@ -131,19 +131,22 @@ The client is exported as a named singleton (`supabase`) and imported where need
 
 ### Database Queries
 
-The frontend currently makes one direct database query:
+The frontend makes direct Supabase database queries for several features:
 
-- **Assignment key validation** (`src/pages/Submit.jsx`): Queries the `assignment_runs` table to verify that a student-provided assignment key (the `assignment_run_id`) exists before allowing a file upload. Uses `.select().eq().single()`.
+- **Assignment key validation** (`src/lib/submissionUpload.js`): Queries the `assignment_runs` table to verify that a student-provided assignment key (the `assignment_run_id`) exists, then looks up the `assignments` table to get `course_id`. These values are sent to the backend along with the file.
+- **Instructor dashboard data** (`src/instructor/api.js`): Queries `courses`, `assignments`, `assignment_runs`, `repositories`, `submissions`, and `results` tables to populate the instructor dashboard — course lists, assignment lists, review queue, analytics, and submission reports.
+- **Assignment export** (`src/instructor/api.js`): The `fetchExportData()` function chains queries across `repositories` → `submissions` → `results` to gather all data for a given assignment run, used by the zip export feature.
 
-### Storage Uploads
+### Storage Operations
 
-Student submissions are uploaded directly to Supabase Storage from the browser:
+**Uploads** — Student submissions are uploaded via the backend API, **not** directly to Supabase Storage. The frontend POSTs a `FormData` to `/api/submit` with `file`, `student` (hashed ID), `assignment` (numeric `assign_id`), and `course` (`course_id`). The backend's `SubmitController` handles storage upload, database inserts, and plagiarism analysis.
 
-- **Bucket**: `Submissions`
-- **Path format**: `submissions/{assignmentKey}/{firstName}_{lastName}_{timestamp}_{filename}`
-  - `timestamp` is `Date.now()` to ensure uniqueness
-  - `filename` is sanitized (non-alphanumeric characters replaced with `_`)
-- **Accepted file types**: `.zip`, `.c`, `.cpp`, `.java`
+- **Accepted file types** (validated client-side): `.zip`, `.c`, `.cpp`, `.java`
+
+**Downloads** — The instructor dashboard downloads files from the `Submissions` bucket for two purposes:
+
+- **Submission comparison view** (`readStorageText` in `api.js`): Downloads individual submission files as text for the side-by-side code comparison UI. Filters out binary content.
+- **Assignment export** (`downloadStorageBlob` in `api.js`): Downloads submission files as raw blobs to include in the zip export. Files are downloaded in batches of 5 to avoid overwhelming the browser.
 
 ## Backend Integration
 
@@ -159,6 +162,50 @@ Frontend (localhost:5173)                 Backend (localhost:8080)
 The proxy is configured in `vite.config.js`. For production deployments, configure your reverse proxy (Nginx, Cloudflare, etc.) to route `/api` to the backend server.
 
 The backend handles the full plagiarism detection pipeline: file storage, tokenization, K-gram comparison, and result storage. See the [backend API docs](../../backend/docs/API.md) for endpoint details.
+
+## Assignment Export Feature
+
+The instructor dashboard includes an **Export** button on each assignment card that generates and downloads a zip file containing all student submissions, plagiarism results, and a summary CSV.
+
+### How It Works
+
+1. Instructor clicks "Export" on an assignment card in the dashboard
+2. `buildAssignmentExportZip()` in `src/instructor/api.js` orchestrates the process:
+   - Queries `repositories` by `assignment_run_id` to find all repos for the assignment
+   - Queries `submissions` by `repository_id` to find all student submissions
+   - Queries `results` by `submission_id` to find plagiarism comparison results
+   - Downloads each submission file from Supabase Storage (batched, 5 at a time)
+   - Builds a JSZip archive with the following structure:
+
+```
+Assignment_Name-export.zip
+├── submissions/
+│   ├── john_doe/
+│   │   ├── uploaded_file.zip       (original submission from storage)
+│   │   └── plagiarism_result.json  (similarity scores and matched pairs)
+│   ├── jane_smith/
+│   │   └── ...
+├── previous_offerings/
+│   └── README.txt                  (placeholder — feature not yet implemented)
+└── summary.csv                     (one row per student with scores)
+```
+
+3. The zip blob is triggered as a browser download using the native `Blob` + `URL.createObjectURL` + `link.click()` pattern
+
+### Dependencies
+
+- **JSZip** (`jszip`) — Client-side zip generation. Added as a production dependency.
+
+### Student Folder Naming
+
+Student folders are named using the `firstName_lastName` pattern parsed from the submission `folder_path` (e.g., `john_doe/`). This uses the same `parseStudentNameFromFolderPath()` function used elsewhere in the dashboard. If the name cannot be parsed, falls back to `student_{student_id}`. Duplicate names are disambiguated by appending the `submission_id`.
+
+### Edge Cases Handled
+
+- **No submissions**: Zip contains an empty `submissions/` folder and a header-only `summary.csv`
+- **No plagiarism results**: `plagiarism_result.json` has an empty `results` array; CSV score columns are blank
+- **Storage download failure**: A `download_error.txt` file is placed in the student's folder instead
+- **Duplicate student names**: Folder name gets `_${submission_id}` appended
 
 ## Design System
 

@@ -6,6 +6,7 @@ import {
   validateSubmissionFile,
 } from '../lib/submissionUpload'
 import {
+  buildAssignmentExportZip,
   createInstructorCourse,
   createInstructorAssignment,
   deleteInstructorAssignment,
@@ -68,7 +69,7 @@ export default function InstructorDashboard() {
   const [assignmentsLoading, setAssignmentsLoading] = useState(false)
   const [editingAssignment, setEditingAssignment] = useState(null)
   const [formName, setFormName] = useState('')
-  const [formLanguage, setFormLanguage] = useState('Java')
+  const [formLanguage, setFormLanguage] = useState('java')
   const [formTopK, setFormTopK] = useState('3')
   const [formThreshold, setFormThreshold] = useState('70')
   const [formDueDate, setFormDueDate] = useState('')
@@ -81,6 +82,7 @@ export default function InstructorDashboard() {
   const [uploadError, setUploadError] = useState('')
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [uploadLoading, setUploadLoading] = useState(false)
+  const [exportingAssignmentId, setExportingAssignmentId] = useState(null)
   const [activeTab, setActiveTab] = useState('assignments')
   const [submissions, setSubmissions] = useState([])
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
@@ -242,7 +244,7 @@ export default function InstructorDashboard() {
 
   const resetAssignmentForm = () => {
     setFormName('')
-    setFormLanguage('Java')
+    setFormLanguage('java')
     setFormTopK('3')
     setFormThreshold('70')
     setFormDueDate('')
@@ -510,6 +512,30 @@ export default function InstructorDashboard() {
     } catch (error) {
       console.error(error)
       window.alert(error.message || 'Failed to delete assignment.')
+    }
+  }
+
+  const [copiedKeyId, setCopiedKeyId] = useState(null)
+
+  const handleCopyKey = async (assignmentRunId) => {
+    try {
+      await navigator.clipboard.writeText(assignmentRunId)
+      setCopiedKeyId(assignmentRunId)
+      setTimeout(() => setCopiedKeyId(null), 2000)
+    } catch {
+      window.alert('Failed to copy to clipboard.')
+    }
+  }
+
+  const handleExportAssignment = async (assignment) => {
+    setExportingAssignmentId(assignment.assignment_run_id)
+    try {
+      await buildAssignmentExportZip(assignment)
+    } catch (error) {
+      console.error(error)
+      window.alert(error.message || 'Failed to export assignment data.')
+    } finally {
+      setExportingAssignmentId(null)
     }
   }
 
@@ -849,12 +875,13 @@ export default function InstructorDashboard() {
                         <div className="assignment-card-left">
                           <p className="assignment-number">Assignment {index + 1}</p>
                           <h2 className="assignment-name">{item.name}</h2>
+                          <p className="assignment-key">Key: {item.assignment_run_id}</p>
                           <p className="assignment-due">Due: {formatDueDate(item.due_date)}</p>
                           <p className="assignment-preview">{item.description}</p>
                         </div>
 
                         <div className="assignment-card-right">
-                          <span className="status-visible">{item.language}</span>
+                          <span className="status-visible">{item.language === 'cpp' ? 'C++' : item.language === 'java' ? 'Java' : item.language?.toUpperCase()}</span>
                           <span className="status-hidden">
                             Top K {item.top_k} | Threshold {item.threshold}%
                           </span>
@@ -868,6 +895,23 @@ export default function InstructorDashboard() {
                             onClick={() => openRepositoryUploadForm(item)}
                           >
                             Upload Repo
+                          </button>
+
+                          <button
+                            className="btn-export"
+                            onClick={() => handleCopyKey(item.assignment_run_id)}
+                          >
+                            {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
+                          </button>
+
+                          <button
+                            className="btn-export"
+                            onClick={() => handleExportAssignment(item)}
+                            disabled={exportingAssignmentId === item.assignment_run_id}
+                          >
+                            {exportingAssignmentId === item.assignment_run_id
+                              ? 'Exporting...'
+                              : 'Export'}
                           </button>
 
                           <button
@@ -918,9 +962,9 @@ export default function InstructorDashboard() {
                       value={formLanguage}
                       onChange={(event) => setFormLanguage(event.target.value)}
                     >
-                      <option value="Java">Java</option>
-                      <option value="C">C</option>
-                      <option value="C++">C++</option>
+                      <option value="java">Java</option>
+                      <option value="c">C</option>
+                      <option value="cpp">C++</option>
                     </select>
                   </div>
 
