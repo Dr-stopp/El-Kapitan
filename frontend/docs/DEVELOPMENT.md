@@ -178,4 +178,4 @@ The app uses Tailwind's default breakpoints with mobile-first design:
   Format: short description, affected file(s), and any workaround.
 -->
 
-- **`loadRepositoriesByAssignmentIds` uses wrong column name** (`src/instructor/api.js`): The helper function queries `repositories.assignment_id`, but the actual database column is `assignment_run_id`. This doesn't cause visible errors because all callers (`fetchReviewQueue`, `fetchAnalytics`, etc.) catch exceptions and fall back to mock data. The `buildAssignmentExportZip` export function bypasses this helper and queries the correct `assignment_run_id` column directly. If `loadRepositoriesByAssignmentIds` is fixed in the future, the export function's inline query can be replaced with a call to the shared helper.
+*No known issues documented yet. Add entries here as they are discovered.*

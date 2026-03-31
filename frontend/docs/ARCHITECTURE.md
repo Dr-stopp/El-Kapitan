@@ -133,19 +133,15 @@ The client is exported as a named singleton (`supabase`) and imported where need
 
 The frontend makes direct Supabase database queries for several features:
 
-- **Assignment key validation** (`src/pages/Submit.jsx`): Queries the `assignment_runs` table to verify that a student-provided assignment key (the `assignment_run_id`) exists before allowing a file upload. Uses `.select().eq().single()`.
+- **Assignment key validation** (`src/lib/submissionUpload.js`): Queries the `assignment_runs` table to verify that a student-provided assignment key (the `assignment_run_id`) exists, then looks up the `assignments` table to get `course_id`. These values are sent to the backend along with the file.
 - **Instructor dashboard data** (`src/instructor/api.js`): Queries `courses`, `assignments`, `assignment_runs`, `repositories`, `submissions`, and `results` tables to populate the instructor dashboard — course lists, assignment lists, review queue, analytics, and submission reports.
 - **Assignment export** (`src/instructor/api.js`): The `fetchExportData()` function chains queries across `repositories` → `submissions` → `results` to gather all data for a given assignment run, used by the zip export feature.
 
 ### Storage Operations
 
-**Uploads** — Student submissions are uploaded directly to Supabase Storage from the browser:
+**Uploads** — Student submissions are uploaded via the backend API, **not** directly to Supabase Storage. The frontend POSTs a `FormData` to `/api/submit` with `file`, `student` (hashed ID), `assignment` (numeric `assign_id`), and `course` (`course_id`). The backend's `SubmitController` handles storage upload, database inserts, and plagiarism analysis.
 
-- **Bucket**: `Submissions`
-- **Path format**: `submissions/{assignmentKey}/{firstName}_{lastName}_{timestamp}_{filename}`
-  - `timestamp` is `Date.now()` to ensure uniqueness
-  - `filename` is sanitized (non-alphanumeric characters replaced with `_`)
-- **Accepted file types**: `.zip`, `.c`, `.cpp`, `.java`
+- **Accepted file types** (validated client-side): `.zip`, `.c`, `.cpp`, `.java`
 
 **Downloads** — The instructor dashboard downloads files from the `Submissions` bucket for two purposes:
 

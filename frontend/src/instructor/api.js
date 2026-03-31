@@ -230,7 +230,7 @@ async function loadRepositoriesByIds(repositoryIds) {
 
   const { data, error } = await supabase
     .from('repositories')
-    .select('repository_id, assignment_id, repository_path')
+    .select('repository_id, assignment_run_id, repository_path')
     .in('repository_id', repositoryIds)
 
   if (error) throw error
@@ -243,8 +243,8 @@ async function loadRepositoriesByAssignmentIds(assignmentIds) {
 
   const { data, error } = await supabase
     .from('repositories')
-    .select('repository_id, assignment_id, repository_path')
-    .in('assignment_id', assignmentIds)
+    .select('repository_id, assignment_run_id, repository_path')
+    .in('assignment_run_id', assignmentIds)
 
   if (error) throw error
 
@@ -380,7 +380,7 @@ async function deleteAssignmentRunGraph(assignmentRunIds, options = {}) {
   const { data: repositoryRows, error: repositoriesLookupError } = await supabase
     .from('repositories')
     .select('repository_id, repository_path')
-    .in('assignment_id', normalizedAssignmentRunIds)
+    .in('assignment_run_id', normalizedAssignmentRunIds)
 
   if (repositoriesLookupError) throw repositoriesLookupError
 
@@ -735,7 +735,7 @@ export async function fetchReviewQueue(courseId) {
     return {
       submissions: submissions.map((submission) => {
         const repository = repositoriesMap.get(String(submission.repository_id))
-        const assignment = assignmentMap.get(String(repository?.assignment_id))
+        const assignment = assignmentMap.get(String(repository?.assignment_run_id))
         const bestResult = pickBestResult(resultsMap.get(String(submission.submission_id)) || [])
         const similarityScore = Number.isFinite(Number(bestResult?.score))
           ? Number(bestResult.score)
@@ -744,7 +744,7 @@ export async function fetchReviewQueue(courseId) {
         return {
           id: submission.submission_id,
           studentName: mapUserName(submission, submission.student_id),
-          assignmentName: assignment?.name || `Assignment #${repository?.assignment_id || submission.repository_id}`,
+          assignmentName: assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
           language: assignment?.language || 'Unknown',
           similarityScore,
           status: getReviewStatus(similarityScore),
@@ -824,7 +824,7 @@ export async function fetchSubmissionReport(submissionId) {
     const repository = repositoriesMap.get(String(submission.repository_id))
 
     const [assignmentRunsMap, resultsMap] = await Promise.all([
-      loadAssignmentRunsByIds(repository?.assignment_id ? [repository.assignment_id] : []),
+      loadAssignmentRunsByIds(repository?.assignment_run_id ? [repository.assignment_run_id] : []),
       loadResultsBySubmissionIds([submissionId]),
     ])
 
@@ -833,7 +833,7 @@ export async function fetchSubmissionReport(submissionId) {
     )
     const sourceSubmissionIds = unique(submissionResults.map((row) => row.submission_2))
     const sourceSubmissionsMap = await loadSubmissionsByIds(sourceSubmissionIds)
-    const assignment = assignmentRunsMap.get(String(repository?.assignment_id))
+    const assignment = assignmentRunsMap.get(String(repository?.assignment_run_id))
     const bestScore = Number.isFinite(Number(submissionResults[0]?.score))
       ? Number(submissionResults[0].score)
       : null
@@ -841,14 +841,14 @@ export async function fetchSubmissionReport(submissionId) {
     return {
       id: submission.submission_id,
       studentName: mapUserName(submission, submission.student_id),
-      assignmentName: assignment?.name || `Assignment #${repository?.assignment_id || submission.repository_id}`,
+      assignmentName: assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
       language: assignment?.language || 'Unknown',
       submittedAt: formatShortTimestamp(submission.created_at),
       similarityScore: bestScore,
       status: getReviewStatus(bestScore),
       analysisState: submissionResults.length ? 'complete' : 'queued',
       summary: buildReportSummary(
-        assignment?.name || `Assignment #${repository?.assignment_id || submission.repository_id}`,
+        assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
         bestScore,
         submissionResults.length
       ),

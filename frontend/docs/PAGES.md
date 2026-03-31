@@ -90,8 +90,9 @@ Instructor registration form using Supabase Auth. Centered card layout matching 
 ### Submit (`/submit`)
 
 **File**: `src/pages/Submit.jsx`
+**Upload logic**: `src/lib/submissionUpload.js`
 
-Public student submission page. No authentication required. Uses the Supabase client directly for assignment key validation and file upload.
+Public student submission page. No authentication required. Students submit code files through this page using an assignment key provided by their instructor.
 
 **Form fields**:
 
@@ -100,7 +101,9 @@ Public student submission page. No authentication required. Uses the Supabase cl
 | Assignment Key | `text` | Yes | Must match an existing `assignment_run_id` in the database |
 | First Name | `text` | Yes | Required |
 | Last Name | `text` | Yes | Required |
-| File Upload | `file` | Yes | Accepted extensions: `.zip`, `.c`, `.cpp`, `.java` |
+| Email | `email` | Yes | HTML5 email validation |
+| Upload Type | toggle | Yes | "Code File" (default) or "Repository (.zip)" |
+| File Upload | `file` | Yes | Code File: `.zip`, `.c`, `.cpp`, `.java`; Repository: `.zip` only |
 
 **File upload zone**:
 - Supports drag-and-drop and click-to-browse via a hidden `<input type="file">`
@@ -109,18 +112,18 @@ Public student submission page. No authentication required. Uses the Supabase cl
   - Drag active: `border-primary` with `bg-accent/30` background
   - File selected: `border-success` with green background, checkmark icon, filename displayed
 - File type validation runs both on file selection and on form submit
-- Accepted MIME types set via `accept=".zip,.c,.cpp,.java"` on the input
+- Accepted extensions change based on the selected upload type
 
 **Submission flow**:
 
 1. All fields validated client-side (HTML5 required + file type check)
-2. Assignment key validated: `supabase.from('assignment_runs').select(...).eq('assignment_run_id', key).single()`
-   - If no matching row or error → "Invalid assignment key" error shown, upload skipped
-3. Storage path built: `submissions/{assignmentKey}/{firstName}_{lastName}_{timestamp}_{sanitizedFilename}`
-4. File uploaded: `supabase.storage.from('Submissions').upload(path, file)`
-   - On upload error → "File upload failed" error shown
-5. On success: green success message shown, all form fields reset
-6. On any unhandled exception: generic error message shown
+2. Assignment key validated via Supabase: `assignment_runs` table queried to verify the UUID exists and get `assign_id`
+3. `assignments` table queried to get `course_id` for the assignment
+4. Student ID computed: `buildStudentId(email, firstName, lastName)` produces a deterministic numeric hash
+5. `FormData` POSTed to `/api/submit` (proxied to backend) with fields: `file`, `student` (hash), `assignment` (`assign_id`), `course` (`course_id`)
+6. Backend handles: Supabase Storage upload, database inserts (`submissions` table), and plagiarism analysis
+7. On success: green success message shown, all form fields reset
+8. On error: backend error message displayed (e.g., "Upload failed", "Database error")
 
 ---
 
@@ -136,13 +139,15 @@ The main instructor workspace. Requires authentication. Contains three tabs: Ass
 
 Displays all assignments for the selected course. Each assignment is rendered as a card with:
 
-- Assignment name, due date, language, and detection settings (top K, threshold)
-- Action buttons: **Edit**, **Upload Repo**, **Export**, **Delete**
+- Assignment name, **assignment key** (the `assignment_run_id` UUID shown in monospace), due date, language, and detection settings (top K, threshold)
+- Action buttons: **Edit**, **Upload Repo**, **Copy Key**, **Export**, **Delete**
 
 **Course management**:
 - Create/delete courses from the sidebar course list
 - Select a course to view its assignments
 - Create new assignments with language, due date, top K, and threshold settings
+
+**Assignment key**: Each assignment card displays its `assignment_run_id` (UUID) below the assignment name. This is the key students enter on the `/submit` page. Instructors can copy it using the "Copy Key" button.
 
 **Export button**: Generates and downloads a zip file containing all student submissions, plagiarism results, and a summary CSV for the assignment. See [ARCHITECTURE.md](ARCHITECTURE.md#assignment-export-feature) for full details on the zip structure and implementation.
 
@@ -150,6 +155,7 @@ Displays all assignments for the selected course. Each assignment is rendered as
 |--------|--------|---------------|
 | Edit | Opens inline edit form for the assignment | — |
 | Upload Repo | Opens upload form for repository submission | `uploadLoading` |
+| Copy Key | Copies the assignment key (UUID) to clipboard | Shows "Copied!" for 2 seconds |
 | Export | Downloads zip of all submissions + results | `exportingAssignmentId` (per-assignment) |
 | Delete | Deletes the assignment run after confirmation | — |
 
