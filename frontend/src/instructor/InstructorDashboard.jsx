@@ -515,6 +515,18 @@ export default function InstructorDashboard() {
     }
   }
 
+  const [copiedKeyId, setCopiedKeyId] = useState(null)
+
+  const handleCopyKey = async (assignmentRunId) => {
+    try {
+      await navigator.clipboard.writeText(assignmentRunId)
+      setCopiedKeyId(assignmentRunId)
+      setTimeout(() => setCopiedKeyId(null), 2000)
+    } catch {
+      window.alert('Failed to copy to clipboard.')
+    }
+  }
+
   const handleExportAssignment = async (assignment) => {
     setExportingAssignmentId(assignment.assignment_run_id)
     try {
@@ -863,6 +875,7 @@ export default function InstructorDashboard() {
                         <div className="assignment-card-left">
                           <p className="assignment-number">Assignment {index + 1}</p>
                           <h2 className="assignment-name">{item.name}</h2>
+                          <p className="assignment-key">Key: {item.assignment_run_id}</p>
                           <p className="assignment-due">Due: {formatDueDate(item.due_date)}</p>
                           <p className="assignment-preview">{item.description}</p>
                         </div>
@@ -882,6 +895,13 @@ export default function InstructorDashboard() {
                             onClick={() => openRepositoryUploadForm(item)}
                           >
                             Upload Repo
+                          </button>
+
+                          <button
+                            className="btn-export"
+                            onClick={() => handleCopyKey(item.assignment_run_id)}
+                          >
+                            {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
                           </button>
 
                           <button

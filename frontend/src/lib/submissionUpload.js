@@ -75,6 +75,7 @@ export async function uploadSubmissionAsset({
     throw new Error('Missing assignment key.')
   }
 
+  // Look up assignment run to get the numeric assign_id
   const { data: assignmentRun, error: lookupError } = await supabase
     .from('assignment_runs')
     .select('assignment_run_id, assign_id')
@@ -85,55 +86,35 @@ export async function uploadSubmissionAsset({
     throw new Error('Invalid assignment key. Please check the key and try again.')
   }
 
-  const timestamp = Date.now()
-  const safeName = sanitizePathSegment(file.name)
-  const storagePath = `submissions/${assignmentRun.assignment_run_id}/${submissionKind}/${sanitizePathSegment(
-    firstName
-  )}_${sanitizePathSegment(lastName)}_${timestamp}_${safeName}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('Submissions')
-    .upload(storagePath, file)
-
-  if (uploadError) {
-    throw new Error('File upload failed. Please try again.')
-  }
-
-  const { data: repositoryRow, error: repositoryError } = await supabase
-    .from('repositories')
-    .insert({
-      assignment_id: assignmentRun.assignment_run_id,
-      repository_path: storagePath,
-    })
-    .select('repository_id, assignment_id, repository_path, created_at')
+  // Look up course_id from the assignment
+  const { data: assignmentRow, error: assignmentError } = await supabase
+    .from('assignments')
+    .select('assign_id, course_id')
+    .eq('assign_id', assignmentRun.assign_id)
     .single()
 
-  if (repositoryError || !repositoryRow) {
-    await supabase.storage.from('Submissions').remove([storagePath])
-    throw new Error('The upload succeeded, but creating the repository record failed.')
+  if (assignmentError || !assignmentRow) {
+    throw new Error('Could not find the assignment associated with this key.')
   }
 
-  const { data: submissionRow, error: submissionError } = await supabase
-    .from('submissions')
-    .insert({
-      repository_id: repositoryRow.repository_id,
-      student_id: buildStudentId(email, firstName, lastName),
-      folder_path: storagePath,
-      test_flag: submissionKind,
-    })
-    .select('submission_id, created_at, repository_id, student_id, folder_path, test_flag')
-    .single()
+  const studentId = buildStudentId(email, firstName, lastName)
 
-  if (submissionError || !submissionRow) {
-    await supabase.from('repositories').delete().eq('repository_id', repositoryRow.repository_id)
-    await supabase.storage.from('Submissions').remove([storagePath])
-    throw new Error('The upload finished, but saving the submission to the database failed.')
+  // POST to backend — it handles storage upload, DB inserts, and plagiarism analysis
+  const formData = new FormData()
+  formData.append('file', file, file.name)
+  formData.append('student', String(studentId))
+  formData.append('assignment', String(assignmentRun.assign_id))
+  formData.append('course', String(assignmentRow.course_id))
+
+  const res = await fetch('/api/submit', {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(body || 'Upload failed. Please try again.')
   }
 
-  return {
-    assignmentRun,
-    repository: repositoryRow,
-    submission: submissionRow,
-    storagePath,
-  }
+  return { assignmentRun }
 }

@@ -432,8 +432,16 @@
 }
 
 .assignment-number,
-.assignment-due {
+.assignment-due,
+.assignment-key {
   margin: 0;
+}
+
+.assignment-key {
+  font-size: 0.8rem;
+  color: var(--el-text-muted);
+  font-family: monospace;
+  word-break: break-all;
 }
 
 .assignment-number {
