@@ -1,5 +1,10 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
+--
+-- NOTE: The repositories table column is named "assignment_run_id" in the database.
+-- Some frontend code (loadRepositoriesByAssignmentIds in api.js) incorrectly
+-- references it as "assignment_id". The assignment export feature queries the
+-- correct column name directly. See frontend/docs/DEVELOPMENT.md Known Issues.
 
 CREATE TABLE public.assignment_runs (
   assign_id bigint NOT NULL,

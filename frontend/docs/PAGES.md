@@ -8,9 +8,11 @@
 | `/login` | Login | No | Complete |
 | `/signup` | Signup | No | Complete |
 | `/submit` | Submit | No | Complete |
-| `/dashboard` | Dashboard | Yes | Placeholder |
-| `/courses` | Courses | Yes | Placeholder |
-| `/compare` | Compare | Yes | Placeholder |
+| `/dashboard` | Instructor Dashboard | Yes | Complete |
+| `/courses` | *(redirects to `/dashboard`)* | Yes | Redirect |
+| `/compare` | *(redirects to `/dashboard`)* | Yes | Redirect |
+| `/report/:submissionId` | Submission Report | Yes | Complete |
+| `/compare/:submissionId` | Submission Compare | Yes | Complete |
 
 Protected routes redirect to `/login` if the user is not authenticated.
 
@@ -122,34 +124,68 @@ Public student submission page. No authentication required. Uses the Supabase cl
 
 ---
 
-## Placeholder Pages
+## Instructor Dashboard (`/dashboard`)
 
-All placeholder pages follow the same template: a "Coming Soon" badge (`bg-accent` rounded pill), the page title, a description of planned functionality, and three preview cards showing planned features. All three require instructor authentication — unauthenticated visitors are redirected to `/login` by `ProtectedRoute`.
+**File**: `src/instructor/InstructorDashboard.jsx`
+**Styles**: `src/instructor/instructor.css`
+**Data layer**: `src/instructor/api.js`
 
-### Dashboard (`/dashboard`)
+The main instructor workspace. Requires authentication. Contains three tabs: Assignments, Review Queue, and Analytics.
 
-**File**: `src/pages/Dashboard.jsx`
+### Assignments Tab
 
-Will display: recent submissions, course overview, quick stats.
+Displays all assignments for the selected course. Each assignment is rendered as a card with:
 
-**Preview cards**: Recent Submissions, Course Overview, Quick Stats
+- Assignment name, due date, language, and detection settings (top K, threshold)
+- Action buttons: **Edit**, **Upload Repo**, **Export**, **Delete**
+
+**Course management**:
+- Create/delete courses from the sidebar course list
+- Select a course to view its assignments
+- Create new assignments with language, due date, top K, and threshold settings
+
+**Export button**: Generates and downloads a zip file containing all student submissions, plagiarism results, and a summary CSV for the assignment. See [ARCHITECTURE.md](ARCHITECTURE.md#assignment-export-feature) for full details on the zip structure and implementation.
+
+| Button | Action | Loading State |
+|--------|--------|---------------|
+| Edit | Opens inline edit form for the assignment | — |
+| Upload Repo | Opens upload form for repository submission | `uploadLoading` |
+| Export | Downloads zip of all submissions + results | `exportingAssignmentId` (per-assignment) |
+| Delete | Deletes the assignment run after confirmation | — |
+
+### Review Queue Tab
+
+**Component**: `src/instructor/ReviewQueuePanel.jsx`
+
+Displays all submissions across the selected course with similarity scores, review status, and filtering. Includes a **JSON export** of the filtered queue data (separate from the assignment zip export).
+
+### Analytics Tab
+
+**Component**: `src/instructor/AnalyticsPanel.jsx`
+
+Displays course-level analytics: submission counts, average similarity scores, and score distribution.
 
 ---
 
-### Courses (`/courses`)
+### Submission Report (`/report/:submissionId`)
 
-**File**: `src/pages/Courses.jsx`
+**File**: `src/instructor/SubmissionReportPage.jsx`
 
-Will display: list of courses, ability to create courses and assignments, generate assignment keys.
-
-**Preview cards**: Manage Courses, Create Assignments, Generate Keys
+Displays detailed plagiarism report for a single submission, including similarity scores against all compared submissions.
 
 ---
 
-### Compare (`/compare`)
+### Submission Compare (`/compare/:submissionId`)
 
-**File**: `src/pages/Compare.jsx`
+**File**: `src/instructor/SubmissionComparePage.jsx`
 
-Will display: plagiarism comparison results between submissions, similarity scores, side-by-side code view.
+Side-by-side code comparison view between two submissions, with highlighted matching line ranges from the plagiarism detection results.
 
-**Preview cards**: Similarity Scores, Side-by-Side View, Detailed Reports
+---
+
+## Redirected Routes
+
+The following routes exist for backwards compatibility but redirect to the instructor dashboard:
+
+- `/courses` → `/dashboard`
+- `/compare` → `/dashboard`
