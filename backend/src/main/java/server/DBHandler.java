@@ -84,7 +84,9 @@ public class DBHandler {
     @Transactional
     public void insertSubmission(
             UUID assignmentRunId,
-            long studentId,
+            String firstName,
+            String lastName,
+            String email,
             String folderPath
     ) throws SQLException {
 
@@ -92,11 +94,11 @@ public class DBHandler {
 
         String insertSql = """
         INSERT INTO public."submissions"
-        (student_id, folder_path, repository_id)
-        VALUES (?, ?, ?)
+        (student_first_name, student_last_name, student_email, folder_path, repository_id)
+        VALUES (?, ?, ?, ?, ?)
         """;
 
-        jdbc.update(insertSql, studentId, folderPath, repoId);
+        jdbc.update(insertSql, firstName, lastName, email, folderPath, repoId);
     }
 
     @Transactional

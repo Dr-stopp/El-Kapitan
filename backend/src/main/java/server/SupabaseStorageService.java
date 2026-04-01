@@ -41,14 +41,14 @@ public class SupabaseStorageService {
                 .build();
     }
 
-    public String uploadSubmission(MultipartFile file, long student, String assignment, String course, String bucket) throws Exception {
+    public String uploadSubmission(MultipartFile file, String studentName, String assignment, String course, String bucket) throws Exception {
         String contentType = file.getContentType();
         byte[] fileBytes = file.getBytes();
-        return uploadSubmission(fileBytes, contentType, student, assignment, course, bucket);
+        return uploadSubmission(fileBytes, contentType, studentName, assignment, course, bucket);
     }
 
-    public String uploadSubmission(byte[] fileBytes, String contentType, long student, String assignment, String course, String bucket) throws Exception {
-        String fileName = student + "-" + assignment + ".bin";
+    public String uploadSubmission(byte[] fileBytes, String contentType, String studentName, String assignment, String course, String bucket) throws Exception {
+        String fileName = studentName + "-" + assignment + ".bin";
 
         String objectPath =  course + "/" + assignment + "/" + sanitizeObjectName(fileName);
 

@@ -2,7 +2,11 @@
 <html>
 <body>
 <h1>Insert Submission</h1>
-<input type="text" id="student" placeholder="Student ID">
+<input type="text" id="studentFirst" placeholder="Student First Name">
+<br>
+<input type="text" id="studentLast" placeholder="Student Last Name">
+<br>
+<input type="text" id="studentEmail" placeholder="Student Email">
 <br>
 <input type="text" id="assignment" placeholder="Assignment Run ID">
 <br>
@@ -29,17 +33,21 @@
 <script>
     async function send() {
       const file = document.getElementById("submission").files[0];
-      const student = document.getElementById("student").value.trim();
+      const studentFirst = document.getElementById("studentFirst").value.trim();
+      const studentLast = document.getElementById("studentLast").value.trim();
+      const studentEmail = document.getElementById("studentEmail").value.trim();
       const assignment = document.getElementById("assignment").value.trim();
 
       if (!file) return console.log("No file selected");
-      if (!student || !assignment) {
+      if (!studentFirst || !studentLast || !studentEmail || !assignment) {
         return console.log("Fill student, assignment, and course");
       }
 
       const formData = new FormData();
       formData.append("file", file, file.name);
-      formData.append("student", student);
+      formData.append("studentFirst", studentFirst);
+      formData.append("studentLast", studentLast);
+      formData.append("studentEmail", studentEmail);
       formData.append("assignment", assignment);
 
       const res = await fetch("http://localhost:8080/submit", {

@@ -33,29 +33,33 @@ public class SubmitController {
     @PostMapping(path = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> submit(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("student") long student,
+            @RequestParam("studentFirst") String studentFirst,
+            @RequestParam("studentLast") String studentLast,
+            @RequestParam("studentEmail") String studentEmail,
             @RequestParam("assignment") String assignment
     ) {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body("No file uploaded");
         }
         try {
-            log.info("Submit start student={} assignment={} course={}", student, assignment);
+            log.info("Submit start studentFirst={} studentLast={} studentEmail={} assignment={}", studentFirst, studentLast, studentEmail, assignment);
             String course = dbHandler.getCourse(UUID.fromString(assignment));
             if (course == null || course.isBlank()) {
                 log.warn("No course found for assignment_run_id={}", assignment);
                 return ResponseEntity.badRequest().body("Unknown assignment_run_id: " + assignment);
             }
-            Path fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, student + "-" + assignment);
+            String studentName = studentFirst + "-" + studentLast;
+            Path fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, studentName + "-" + assignment);
             byte[] toUpload = Files.readAllBytes(fileToUpload);
             String contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
 
-            String objectPath = storageService.uploadSubmission(toUpload, contentType, student, assignment, course,"Submissions");
+
+            String objectPath = storageService.uploadSubmission(toUpload, contentType, studentName, assignment, course,"Submissions");
             log.info("Upload ok path={}", objectPath);
 
             boolean inserted = false;
             try {
-                dbHandler.insertSubmission(UUID.fromString(assignment), student, objectPath);
+                dbHandler.insertSubmission(UUID.fromString(assignment), studentFirst, studentLast, studentEmail, objectPath);
                 inserted = true;
             } catch (DataIntegrityViolationException dup) {
                 String root = dup.getMostSpecificCause() != null
@@ -64,7 +68,7 @@ public class SubmitController {
                 String normalized = root == null ? "" : root.toLowerCase();
                 if (normalized.contains("duplicate") || normalized.contains("unique")) {
                     // duplicate submission row: ignore, but keep request successful
-                    log.warn("Submission already exists for student={} assignment={}", student, assignment, dup);
+                    log.warn("Submission already exists for studentName={} assignment={}", studentName, assignment, dup);
                 } else {
                     throw dup;
                 }
