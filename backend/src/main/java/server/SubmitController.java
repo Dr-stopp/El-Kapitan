@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -97,18 +98,43 @@ public class SubmitController {
     @PostMapping(path = "/repository", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> repository (
             @RequestParam("file") MultipartFile file,
-            @RequestParam("assignmentRun") String assignmentRun
+            @RequestParam("assignmentRun") String assignmentRun,
+            @RequestParam("repositoryName") String repositoryName
 
     ){
         try {
+            log.info(assignmentRun.toString());
+            log.info(repositoryName);
+            String repoPath = assignmentRun + "/" + repositoryName;
+            long repositoryID = dbHandler.insertRepository(repositoryName, repoPath, UUID.fromString(assignmentRun));
             List<MultipartFile> zipList = zipProcessor.createZipList(file);
+            int uploadedFiles = 0;
             for (MultipartFile f : zipList) {
-                zipProcessor.concatZipFromMultipartToTemp(f, f.getName());
+                String sourceName = f.getName();
+
+
+                Path toSubmitPath = zipProcessor.concatZipFromMultipartToTemp(f, sourceName);
+                File toSubmitFile = toSubmitPath.toFile();
+                String objectPath = storageService.uploadRepository(
+                        toSubmitFile,
+                        UUID.fromString(assignmentRun),
+                        repositoryID,
+                        toSubmitFile.getName(),
+                        "Submissions"
+                );
+                dbHandler.insertRepositorySubmission(repositoryID, objectPath);
+                uploadedFiles++;
             }
+            log.info("Files uploaded");
+
+            return ResponseEntity.ok("repository_id=" + repositoryID + ", files_uploaded=" + uploadedFiles);
         } catch (IOException e) {
             log.error(e.getMessage());
+            return ResponseEntity.status(500).body("Repository upload failed: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Repository processing failed", e);
+            return ResponseEntity.status(500).body("Repository processing failed: " + e.getMessage());
         }
-
-        return null;
     }
+
 }

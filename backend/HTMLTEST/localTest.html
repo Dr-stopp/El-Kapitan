@@ -16,6 +16,15 @@
 <input type = "text" id = "repository" placeholder="RepositoryID">
 <br>
 <button onclick = "result()"> Results </button>
+<br>
+<h1>Insert Repository</h1>
+<input type = "text" id = "repoAssignmentRun" placeholder="Assignment Run ID">
+<br>
+<input type = "text" id = "repositoryName" placeholder="RepositoryName">
+<br>
+<input type="file" id="repoFile">
+<br>
+<button onclick = "repository()"> Insert </button>
 
 <script>
     async function send() {
@@ -54,6 +63,28 @@
       formData.append("assignment", assignmentRun);
 
      const res = await fetch("http://localhost:8080/result", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log(res.status, await res.text());
+  }
+</script>
+
+<script>
+  async function repository() {
+    const assignmentRun = document.getElementById("repoAssignmentRun").value.trim();
+    const repositoryName = document.getElementById("repositoryName").value.trim();
+    const file = document.getElementById("repoFile").files[0];
+    if (!assignmentRun || !repository) {
+        return console.log("Fill assignment run and repository");
+      }
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("repositoryName", repositoryName);
+    formData.append("assignmentRun", assignmentRun);
+
+     const res = await fetch("http://localhost:8080/repository", {
         method: "POST",
         body: formData
       });

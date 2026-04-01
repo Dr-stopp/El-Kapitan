@@ -129,7 +129,4 @@ public class resultsManager {
         }
     }
 
-    private void getSubmissions() {
-
-    }
 }

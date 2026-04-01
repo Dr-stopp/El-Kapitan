@@ -93,6 +93,29 @@ public class SupabaseStorageService {
         }
     }
 
+    public String uploadRepository(File toUpload, UUID assignmentRunID, long repositoryID, String objectName, String bucket) {
+        String objectPath = assignmentRunID + "/" + repositoryID + "/" + sanitizeObjectName(objectName);
+        return uploadRepositoryFile(toUpload, objectPath, bucket);
+    }
+
+    public String uploadRepositoryFile(File toUpload, String objectPath, String bucket) {
+        String endpoint = "/storage/v1/object/" + bucket + "/" + urlPathEncode(objectPath);
+        try {
+            byte[] fileBytes = Files.readAllBytes(toUpload.toPath());
+            webClient.post()
+                    .uri(endpoint)
+                    .header("x-upsert", "true")
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE)
+                    .bodyValue(fileBytes)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
+
+            return objectPath;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read repository file for upload: " + toUpload.getAbsolutePath(), e);
+        }
+    }
     private static String sanitizeObjectName(String name) {
         String n = name.replace("\\", "/");
         int slash = n.lastIndexOf('/');

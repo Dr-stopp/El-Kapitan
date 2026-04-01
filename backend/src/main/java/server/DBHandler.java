@@ -100,6 +100,16 @@ public class DBHandler {
     }
 
     @Transactional
+    public void insertRepositorySubmission(long repositoryId, String folderPath) {
+        String insertSql = """
+        INSERT INTO public."submissions"
+        (repository_id, folder_path)
+        VALUES (?, ?)
+        """;
+        jdbc.update(insertSql, repositoryId, folderPath);
+    }
+
+    @Transactional
     public void insertSubmission(
             OffsetDateTime createdAt,
             long assignmentRunId,
@@ -180,6 +190,20 @@ public class DBHandler {
                 submission1SecEnd, submission2SecEnd,
                 submission1FileName, submission2FileName
         );
+    }
+
+    @Transactional
+    public long insertRepository(String name, String path, UUID assignmentRunID) {
+        String sql = """
+                INSERT INTO public."repositories" (repository_name, repository_path, assignment_run_id)
+                VALUES(?, ?, ?)
+                RETURNING repository_id
+                """;
+        Long repositoryId = jdbc.queryForObject(sql, Long.class, name, path, assignmentRunID);
+        if (repositoryId == null) {
+            throw new IllegalStateException("Failed to create repository record");
+        }
+        return repositoryId;
     }
 
     @Transactional(readOnly = true)
