@@ -122,8 +122,8 @@ public class resultsManager {
 
             Files.writeString(csvPath, csv.toString(), StandardOpenOption.TRUNCATE_EXISTING);
             File toSubmit = csvPath.toFile();
-            storageService.uploadResult(toSubmit, assignmentRunID, repositoryID, s1, s2, RESULTBUCKET);
-            return csvPath.toString();
+            return storageService.uploadResult(toSubmit, assignmentRunID, repositoryID, s1, s2, RESULTBUCKET);
+
         } catch (IOException e) {
             throw new RuntimeException("Failed to create results CSV", e);
         }
