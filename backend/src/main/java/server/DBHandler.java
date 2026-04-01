@@ -25,6 +25,8 @@ public class DBHandler {
 
     }
 
+
+
     public long generateSubmissionID() {
         String sql = "SELECT nextval('submissions_seq')";
         return jdbc.queryForObject(sql, Long.class);
@@ -229,7 +231,7 @@ public class DBHandler {
         return jdbc.queryForObject(sql, Integer.class);
     }
     @Transactional
-    public String getCourse(UUID assignment) {
+    public String getCourse(UUID assignmentRun) {
         String sql = """
             select course_id
             from public."assignments"
@@ -239,7 +241,18 @@ public class DBHandler {
                 where assignment_run_id = ?
             )
             """;
-        List<String> rows = jdbc.queryForList(sql, String.class, assignment);
+        List<String> rows = jdbc.queryForList(sql, String.class, assignmentRun);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    @Transactional
+    public String getAssignment(UUID assignmentRun) {
+        String sql = """
+                select assign_id
+                from public."assignment_runs"
+                where assignment_run_id = ?
+            """;
+        List<String> rows = jdbc.queryForList(sql, String.class, assignmentRun);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
@@ -264,5 +277,28 @@ public class DBHandler {
                OR (submission_1 = ? AND submission_2 = ?)
             """;
         jdbc.update(sql, submissionId, submissionId1, submissionId1, submissionId);
+    }
+
+    @Transactional
+    public String getFileExt(String assignment) {
+        String sql = """
+            select a."language"
+            from public."assignment_runs" ar
+            join public."assignments" a on a.assign_id = ar.assign_id
+            where ar.assignment_run_id = ?
+            """;
+
+        List<String> rows = jdbc.queryForList(sql, String.class, UUID.fromString(assignment));
+        if (rows.isEmpty() || rows.get(0) == null || rows.get(0).isBlank()) {
+            return null;
+        }
+
+        String fileValue = rows.get(0).trim().toLowerCase();
+        return switch (fileValue) {
+            case "java" -> ".java";
+            case "c" -> ".c";
+            case "cpp" -> ".cpp";
+            default -> null;
+        };
     }
 }

@@ -43,23 +43,29 @@ public class SubmitController {
         }
         try {
             log.info("Submit start studentFirst={} studentLast={} studentEmail={} assignment={}", studentFirst, studentLast, studentEmail, assignment);
-            String course = dbHandler.getCourse(UUID.fromString(assignment));
+            UUID assignmentRunId = UUID.fromString(assignment);
+            String course = dbHandler.getCourse(assignmentRunId);
+            String assignmentId = dbHandler.getAssignment(assignmentRunId);
             if (course == null || course.isBlank()) {
                 log.warn("No course found for assignment_run_id={}", assignment);
                 return ResponseEntity.badRequest().body("Unknown assignment_run_id: " + assignment);
+            }
+            if (assignmentId == null || assignmentId.isBlank()) {
+                log.warn("No assignment found for assignment_run_id={}", assignment);
+                return ResponseEntity.badRequest().body("No assignment found for assignment_run_id: " + assignment);
             }
             String studentName = studentFirst + "-" + studentLast;
             Path fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, studentName + "-" + assignment);
             byte[] toUpload = Files.readAllBytes(fileToUpload);
             String contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+            String fileExt = dbHandler.getFileExt(assignment);
 
-
-            String objectPath = storageService.uploadSubmission(toUpload, contentType, studentName, assignment, course,"Submissions");
+            String objectPath = storageService.uploadSubmission(toUpload, contentType, studentName, assignmentId, assignment, course,"Submissions", fileExt);
             log.info("Upload ok path={}", objectPath);
 
             boolean inserted = false;
             try {
-                dbHandler.insertSubmission(UUID.fromString(assignment), studentFirst, studentLast, studentEmail, objectPath);
+                dbHandler.insertSubmission(assignmentRunId, studentFirst, studentLast, studentEmail, objectPath);
                 inserted = true;
             } catch (DataIntegrityViolationException dup) {
                 String root = dup.getMostSpecificCause() != null
@@ -107,10 +113,19 @@ public class SubmitController {
 
     ){
         try {
-            log.info(assignmentRun.toString());
+            UUID assignmentRunId = UUID.fromString(assignmentRun);
+            String course = dbHandler.getCourse(assignmentRunId);
+            String assignmentId = dbHandler.getAssignment(assignmentRunId);
+            if (course == null || course.isBlank()) {
+                return ResponseEntity.badRequest().body("Unknown assignment_run_id: " + assignmentRun);
+            }
+            if (assignmentId == null || assignmentId.isBlank()) {
+                return ResponseEntity.badRequest().body("No assignment found for assignment_run_id: " + assignmentRun);
+            }
+            log.info(assignmentRunId.toString());
             log.info(repositoryName);
-            String repoPath = assignmentRun + "/" + repositoryName;
-            long repositoryID = dbHandler.insertRepository(repositoryName, repoPath, UUID.fromString(assignmentRun));
+            String repoPath = course + "/" + assignmentId + "/" + assignmentRun + "/" + repositoryName;
+            long repositoryID = dbHandler.insertRepository(repositoryName, repoPath, assignmentRunId);
             List<MultipartFile> zipList = zipProcessor.createZipList(file);
             int uploadedFiles = 0;
             for (MultipartFile f : zipList) {
@@ -121,9 +136,10 @@ public class SubmitController {
                 File toSubmitFile = toSubmitPath.toFile();
                 String objectPath = storageService.uploadRepository(
                         toSubmitFile,
-                        UUID.fromString(assignmentRun),
+                        course,
+                        assignmentId,
+                        assignmentRunId,
                         repositoryID,
-                        toSubmitFile.getName(),
                         "Submissions"
                 );
                 dbHandler.insertRepositorySubmission(repositoryID, objectPath);

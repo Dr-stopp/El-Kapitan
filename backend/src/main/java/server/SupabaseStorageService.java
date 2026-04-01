@@ -41,16 +41,16 @@ public class SupabaseStorageService {
                 .build();
     }
 
-    public String uploadSubmission(MultipartFile file, String studentName, String assignment, String course, String bucket) throws Exception {
+    public String uploadSubmission(MultipartFile file, String studentName, String assignment, String assignmentRun, String course, String bucket, String fileExt) throws Exception {
         String contentType = file.getContentType();
         byte[] fileBytes = file.getBytes();
-        return uploadSubmission(fileBytes, contentType, studentName, assignment, course, bucket);
+        return uploadSubmission(fileBytes, contentType, studentName, assignment, assignmentRun, course, bucket, fileExt);
     }
 
-    public String uploadSubmission(byte[] fileBytes, String contentType, String studentName, String assignment, String course, String bucket) throws Exception {
-        String fileName = studentName + "-" + assignment + ".bin";
-
-        String objectPath =  course + "/" + assignment + "/" + sanitizeObjectName(fileName);
+    public String uploadSubmission(byte[] fileBytes, String contentType, String studentName, String assignment, String assignmentRun, String course, String bucket, String fileExt) throws Exception {
+        String extension = (fileExt == null || fileExt.isBlank()) ? ".bin" : fileExt;
+        String fileName = studentName + "-" + assignmentRun + extension;
+        String objectPath =  course + "/" + assignment + "/" + assignmentRun + "/default/" + sanitizeObjectName(fileName);
 
         String endpoint = "/storage/v1/object/" + bucket + "/" + urlPathEncode(objectPath);
 
@@ -93,8 +93,15 @@ public class SupabaseStorageService {
         }
     }
 
-    public String uploadRepository(File toUpload, UUID assignmentRunID, long repositoryID, String objectName, String bucket) {
-        String objectPath = assignmentRunID + "/" + repositoryID + "/" + sanitizeObjectName(objectName);
+    public String uploadRepository(
+            File toUpload,
+            String course,
+            String assignment,
+            UUID assignmentRunID,
+            long repositoryID,
+            String bucket
+    ) {
+        String objectPath = course + "/" + assignment + "/" + assignmentRunID + "/" + repositoryID + "/" + sanitizeObjectName(toUpload.getName());
         return uploadRepositoryFile(toUpload, objectPath, bucket);
     }
 
