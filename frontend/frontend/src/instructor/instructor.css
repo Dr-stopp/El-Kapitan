@@ -155,6 +155,7 @@
 .teacherButton,
 .btn-new-assignment,
 .btn-upload,
+.btn-generate,
 .btn-edit,
 .btn-delete,
 .btn-delete-course,
@@ -179,6 +180,7 @@
 .teacherButton:hover,
 .btn-new-assignment:hover,
 .btn-upload:hover,
+.btn-generate:hover,
 .btn-export:hover,
 .btn-form-submit:hover,
 .btn-edit:hover,
@@ -196,7 +198,8 @@
 }
 
 .btn-upload,
-.btn-export {
+.btn-export,
+.btn-generate {
   padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid rgba(43, 104, 161, 0.18);
@@ -540,6 +543,7 @@
 
 .btn-new-assignment:disabled,
 .btn-upload:disabled,
+.btn-generate:disabled,
 .btn-export:disabled,
 .btn-edit:disabled,
 .btn-delete:disabled,
@@ -694,11 +698,90 @@
   min-width: 0;
 }
 
+.compareControlBar {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.compareControlGroup {
+  display: grid;
+  gap: 10px;
+}
+
+.compareControlLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.compareToggle,
+.compareNav {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.compareToggleButton {
+  border: 1px solid var(--el-border);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--el-text);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.compareToggleButton.active {
+  background: var(--el-primary);
+  color: #fff;
+  border-color: var(--el-primary);
+}
+
+.compareToggleButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.compareNavStatus {
+  color: var(--el-text-muted);
+  font-weight: 600;
+}
+
+.comparePaneCard,
+.compareDetailCard {
+  display: grid;
+  gap: 16px;
+}
+
+.comparePaneHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.comparePaneBadge {
+  border-radius: 999px;
+  background: rgba(224, 251, 252, 0.9);
+  color: var(--el-primary-dark);
+  padding: 8px 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.compareSourceValue {
+  font-size: 1.4rem;
+}
+
 .codePane {
   max-height: 70vh;
   border-radius: 16px;
   border: 1px solid var(--el-border);
   background: rgba(255, 255, 255, 0.95);
+  overflow: auto;
 }
 
 .codeLine {
@@ -712,7 +795,13 @@
 }
 
 .codeLine.matched {
-  background: rgba(224, 251, 252, 0.82);
+  background: rgba(224, 251, 252, 0.7);
+}
+
+.codeLine.activeMatch {
+  background: linear-gradient(90deg, rgba(121, 186, 205, 0.22), rgba(224, 251, 252, 0.92));
+  border-left: 4px solid var(--el-primary);
+  padding-left: 10px;
 }
 
 .codeLineNumber {
@@ -724,6 +813,65 @@
 .codeLineText {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.codeGap {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 14px;
+  color: var(--el-text-muted);
+  font-style: italic;
+  background: rgba(244, 240, 223, 0.7);
+  border-bottom: 1px dashed rgba(186, 177, 146, 0.7);
+}
+
+.compareDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.compareDetailItem {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--el-border);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.compareDetailItem span {
+  color: var(--el-text-muted);
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.compareDetailItem strong {
+  color: var(--el-text);
+  font-size: 1.05rem;
+}
+
+.compareRangeCard {
+  border-radius: 16px;
+  padding: 16px;
+  background: rgba(224, 251, 252, 0.55);
+  border: 1px solid rgba(103, 179, 196, 0.28);
+}
+
+.compareRangeTitle {
+  margin: 0 0 10px;
+  color: var(--el-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.84rem;
+}
+
+.compareRangeValue {
+  margin: 4px 0 0;
+  color: var(--el-text);
+  font-weight: 600;
 }
 
 @media (max-width: 920px) {
@@ -738,5 +886,15 @@
   .teacherHero,
   .assignment-card {
     flex-direction: column;
+  }
+
+  .compareControlBar,
+  .comparePaneHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .compareDetailGrid {
+    grid-template-columns: 1fr;
   }
 }

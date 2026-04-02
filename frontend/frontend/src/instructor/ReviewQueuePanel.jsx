@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   formatAnalysisStateLabel,
   getDisplayStudentName,
-  getRepositoryLabel,
   normalizeAnalysisState,
 } from './utils'
 
@@ -14,7 +13,6 @@ export default function ReviewQueuePanel({
   loading,
   error,
   privacyMode,
-  selectedRepositories,
 }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
@@ -43,14 +41,13 @@ export default function ReviewQueuePanel({
         if (availableAssignmentNames.length === 0) return true
         return availableAssignmentNames.includes(item.assignmentName)
       })
-      .filter((item) => selectedRepositories.includes(item.repositoryKey ?? 'current'))
       .map((item) => ({
         ...item,
         analysisState: normalizeAnalysisState(item.analysisState),
         displayStudentName: getDisplayStudentName(item.studentName, item.id, privacyMode),
-        repositoryLabel: item.repositoryLabel || getRepositoryLabel(item.repositoryKey),
+        repositoryLabel: item.repositoryLabel || 'Repository',
       }))
-  }, [availableAssignmentNames, privacyMode, selectedCourse, selectedRepositories, submissions])
+  }, [availableAssignmentNames, privacyMode, selectedCourse, submissions])
 
   const filteredSubmissions = useMemo(() => {
     let results = [...scopedSubmissions]
@@ -126,11 +123,7 @@ export default function ReviewQueuePanel({
           <p className="teacherEyebrow">Review Queue</p>
           <h2 className="teacherHeroTitle">Submission screening workspace</h2>
           <p className="teacherHeroText">
-            Review recent submissions, filter flagged work, and inspect likely integrity concerns
-            across the selected repository scope.
-          </p>
-          <p className="teacherSectionMeta scopeSummaryText">
-            Active scope: {selectedRepositories.map(getRepositoryLabel).join(', ')}
+            Review recent submissions, filter flagged work, and inspect likely integrity concerns.
           </p>
         </div>
         <div className="teacherHeroActions">
@@ -171,7 +164,7 @@ export default function ReviewQueuePanel({
                 <div>
                   <h3>Filters</h3>
                   <p className="teacherSectionMeta">
-                    Narrow the queue by masked student label, language, status, or source scope.
+                    Narrow the queue by masked student label, language, or review status.
                   </p>
                 </div>
               </div>
@@ -242,7 +235,7 @@ export default function ReviewQueuePanel({
 
               {filteredSubmissions.length === 0 ? (
                 <div className="teacherEmptyInline">
-                  No submissions matched the current filters and repository scope.
+                  No submissions matched the current filters.
                 </div>
               ) : (
                 <div className="reviewTableWrap">

@@ -1,5 +1,3 @@
-import { getRepositoryLabel } from './utils'
-
 export default function AnalyticsPanel({
   selectedCourse,
   assignments,
@@ -8,7 +6,6 @@ export default function AnalyticsPanel({
   languageCounts,
   loading,
   error,
-  selectedRepositories,
 }) {
   const safeMetrics = metrics ?? {
     totalSubmissions: 0,
@@ -48,9 +45,6 @@ export default function AnalyticsPanel({
           <h2 className="teacherHeroTitle">Instructor monitoring overview</h2>
           <p className="teacherHeroText">
             Track activity levels, identify high-risk cases, and understand the submission mix.
-          </p>
-          <p className="teacherSectionMeta scopeSummaryText">
-            Active scope: {selectedRepositories.map(getRepositoryLabel).join(', ')}
           </p>
         </div>
       </div>

@@ -1,12 +1,10 @@
-import JSZip from 'jszip'
 import { supabase } from '../lib/supabase'
 import {
-  getMockAnalytics,
-  getMockReviewQueue,
   getMockSubmissionComparison,
   getMockSubmissionReport,
 } from './mockData'
-import { formatShortTimestamp, getRepositoryLabel } from './utils'
+import JSZip from 'jszip'
+import { DEFAULT_REPOSITORY_LABEL, formatShortTimestamp, getRepositoryLabel } from './utils'
 
 function ensureSupabase() {
   if (!supabase) {
@@ -20,8 +18,38 @@ function unique(values) {
   return Array.from(new Set(values.filter((value) => value !== null && value !== undefined)))
 }
 
+function buildDataAccessError(error, fallbackMessage) {
+  const code = String(error?.code || '').trim()
+  const message = String(error?.message || '').trim()
+  const detail = String(error?.details || '').trim()
+
+  const parts = [fallbackMessage]
+
+  if (code) {
+    parts.push(`Code: ${code}.`)
+  }
+
+  if (message) {
+    parts.push(message)
+  }
+
+  if (detail) {
+    parts.push(detail)
+  }
+
+  return new Error(parts.join(' ').trim())
+}
+
 function mapUserName(submissionRow, fallbackId) {
-  return parseStudentNameFromFolderPath(submissionRow?.folder_path) || `Student ${fallbackId}`
+  const explicitName = [
+    String(submissionRow?.student_first_name || '').trim(),
+    String(submissionRow?.student_last_name || '').trim(),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+
+  return explicitName || parseStudentNameFromFolderPath(submissionRow?.folder_path) || `Student ${fallbackId}`
 }
 
 function getReviewStatus(score) {
@@ -31,7 +59,54 @@ function getReviewStatus(score) {
   return 'Clear'
 }
 
-function mapAssignmentRun(row, assignmentRow) {
+function buildRepositoryName(repositoryRow) {
+  const explicitName = String(repositoryRow?.repository_name || '').trim()
+
+  if (explicitName) {
+    return explicitName
+  }
+
+  const pathName = String(repositoryRow?.repository_path || '')
+    .split('/')
+    .filter(Boolean)
+    .pop()
+
+  return pathName || DEFAULT_REPOSITORY_LABEL
+}
+
+function hasRepositoryContent(repositoryRow) {
+  if (!repositoryRow) {
+    return false
+  }
+
+  const repositoryPath = String(repositoryRow.repository_path || '').trim()
+  const repositoryName = String(repositoryRow.repository_name || '').trim()
+  const placeholderNames = new Set([DEFAULT_REPOSITORY_LABEL, 'Default Repository'])
+  const hasMeaningfulName = repositoryName && !placeholderNames.has(repositoryName)
+
+  return Boolean(repositoryPath || hasMeaningfulName || (!repositoryRow.is_default && repositoryRow.repository_id))
+}
+
+function pickPrimaryRepository(rows = []) {
+  if (!rows.length) return null
+
+  return [...rows].sort((left, right) => {
+    const leftHasContent = hasRepositoryContent(left)
+    const rightHasContent = hasRepositoryContent(right)
+
+    if (leftHasContent !== rightHasContent) {
+      return leftHasContent ? -1 : 1
+    }
+
+    if (Boolean(left.is_default) !== Boolean(right.is_default)) {
+      return left.is_default ? 1 : -1
+    }
+
+    return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
+  })[0]
+}
+
+function mapAssignmentRun(row, assignmentRow, repositoryRow = null) {
   return {
     assignment_run_id: row.assignment_run_id,
     course_id: assignmentRow?.course_id ?? null,
@@ -44,6 +119,12 @@ function mapAssignmentRun(row, assignmentRow) {
     description: `Language: ${assignmentRow?.language || 'Unknown'} | Top K: ${
       row.top_k
     } | Threshold: ${row.threshold}%`,
+    repository_id: repositoryRow?.repository_id ?? null,
+    repository_path: repositoryRow?.repository_path ?? '',
+    repository_name: buildRepositoryName(repositoryRow),
+    repository_created_at: repositoryRow?.created_at ?? null,
+    is_default_repository: Boolean(repositoryRow?.is_default),
+    has_repository: hasRepositoryContent(repositoryRow),
   }
 }
 
@@ -54,12 +135,27 @@ function sortCoursesByName(courses) {
 }
 
 function isMissingRelation(error, relationName) {
-  if (error?.code !== '42P01') {
+  const code = String(error?.code || '').trim()
+  const message = String(error?.message || '').toLowerCase()
+  const details = String(error?.details || '').toLowerCase()
+  const relation = String(relationName || '').toLowerCase()
+
+  if (!relation) {
     return false
   }
 
-  const message = String(error?.message || '').toLowerCase()
-  return message.includes(String(relationName || '').toLowerCase())
+  if (code === '42P01' && message.includes(relation)) {
+    return true
+  }
+
+  if (code === 'PGRST205') {
+    return message.includes(relation) || details.includes(relation)
+  }
+
+  return (
+    (message.includes('could not find the table') || message.includes('schema cache')) &&
+    (message.includes(relation) || details.includes(relation))
+  )
 }
 
 function resolveInstructorId(instructor) {
@@ -77,11 +173,15 @@ function resolveInstructorId(instructor) {
 
 function groupResultsBySubmission(results) {
   return results.reduce((accumulator, item) => {
-    const key = String(item.submission_1)
-    if (!accumulator.has(key)) {
-      accumulator.set(key, [])
+    const keys = unique([item.submission_1, item.submission_2]).map((value) => String(value))
+
+    for (const key of keys) {
+      if (!accumulator.has(key)) {
+        accumulator.set(key, [])
+      }
+      accumulator.get(key).push(item)
     }
-    accumulator.get(key).push(item)
+
     return accumulator
   }, new Map())
 }
@@ -92,6 +192,37 @@ function pickBestResult(results = []) {
   return [...results].sort(
     (left, right) => Number(right.score || 0) - Number(left.score || 0)
   )[0]
+}
+
+function getCounterpartSubmissionId(resultRow, currentSubmissionId) {
+  const normalizedCurrentId = String(currentSubmissionId || '')
+
+  if (String(resultRow?.submission_1 || '') === normalizedCurrentId) {
+    return resultRow?.submission_2 ?? null
+  }
+
+  if (String(resultRow?.submission_2 || '') === normalizedCurrentId) {
+    return resultRow?.submission_1 ?? null
+  }
+
+  return resultRow?.submission_2 ?? null
+}
+
+function orientSectionsForSubmission(sections, resultRow, currentSubmissionId) {
+  if (
+    String(resultRow?.submission_2 || '') !== String(currentSubmissionId || '') ||
+    !Array.isArray(sections)
+  ) {
+    return sections || []
+  }
+
+  return sections.map((section) => ({
+    id: section.id,
+    leftStartLine: section.rightStartLine,
+    leftEndLine: section.rightEndLine,
+    rightStartLine: section.leftStartLine,
+    rightEndLine: section.leftEndLine,
+  }))
 }
 
 function buildReportSummary(assignmentName, score, resultCount) {
@@ -160,6 +291,76 @@ function buildPlaceholderCode(label, sections, side) {
   }).join('\n')
 }
 
+const RENDERABLE_SOURCE_EXTENSIONS = new Set([
+  '.java',
+  '.c',
+  '.cc',
+  '.cpp',
+  '.cxx',
+  '.h',
+  '.hh',
+  '.hpp',
+  '.hxx',
+  '.py',
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.cs',
+  '.go',
+  '.rb',
+  '.php',
+  '.kt',
+  '.kts',
+  '.swift',
+  '.scala',
+  '.rs',
+  '.sql',
+  '.json',
+  '.xml',
+  '.html',
+  '.css',
+  '.md',
+  '.txt',
+])
+
+function hasRenderableSourceExtension(fileName) {
+  const normalized = String(fileName || '').toLowerCase()
+  return Array.from(RENDERABLE_SOURCE_EXTENSIONS).some((extension) =>
+    normalized.endsWith(extension)
+  )
+}
+
+async function extractTextFromZipBlob(blob) {
+  const zip = await JSZip.loadAsync(blob)
+  const archiveFiles = Object.values(zip.files).filter((entry) => !entry.dir)
+
+  if (!archiveFiles.length) {
+    return ''
+  }
+
+  const preferredFiles = archiveFiles.filter((entry) => hasRenderableSourceExtension(entry.name))
+  const candidateFiles = (preferredFiles.length ? preferredFiles : archiveFiles)
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .slice(0, 12)
+
+  const renderedFiles = []
+
+  for (const entry of candidateFiles) {
+    const text = (await entry.async('text')).replace(/\r\n/g, '\n')
+
+    if (looksBinaryContent(entry.name, text)) {
+      continue
+    }
+
+    renderedFiles.push(
+      candidateFiles.length > 1 ? `// File: ${entry.name}\n${text}` : text
+    )
+  }
+
+  return renderedFiles.join('\n\n').trim()
+}
+
 function looksBinaryContent(objectPath, text) {
   if (!text) return true
   if (String(objectPath || '').toLowerCase().endsWith('.bin')) return true
@@ -167,22 +368,231 @@ function looksBinaryContent(objectPath, text) {
   return Array.from(text.slice(0, 512)).some((character) => character.charCodeAt(0) < 9)
 }
 
+function normalizeStoragePath(objectPath) {
+  return String(objectPath || '')
+    .trim()
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/')
+}
+
+function getParentStoragePrefix(objectPath) {
+  const normalized = normalizeStoragePath(objectPath)
+  const segments = normalized.split('/').filter(Boolean)
+  if (segments.length <= 1) return ''
+  return segments.slice(0, -1).join('/')
+}
+
+function buildStorageCandidateScore(candidatePath, originalPath) {
+  const normalizedCandidate = String(candidatePath || '').toLowerCase()
+  const originalSegments = normalizeStoragePath(originalPath).split('/').filter(Boolean)
+  const originalFileName = String(originalSegments[originalSegments.length - 1] || '').toLowerCase()
+  const originalStem = originalFileName.replace(/\.[^.]+$/, '')
+  const candidateFileName = getFileNameFromPath(candidatePath).toLowerCase()
+
+  let score = 0
+
+  if (candidateFileName === originalFileName) score += 120
+  if (originalStem && candidateFileName.includes(originalStem)) score += 60
+  if (hasRenderableSourceExtension(candidateFileName)) score += 30
+  if (candidateFileName.endsWith('.zip') || candidateFileName.includes('.zip.')) score += 20
+
+  const originalPrefix = getParentStoragePrefix(originalPath)
+  if (originalPrefix && normalizedCandidate.startsWith(originalPrefix.toLowerCase())) score += 10
+
+  score -= normalizedCandidate.split('/').length
+
+  return score
+}
+
+async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 40) {
+  const normalizedPrefix = normalizeStoragePath(prefix)
+  const queue = [{ prefix: normalizedPrefix, depth: 0 }]
+  const discoveredFiles = []
+  const visitedPrefixes = new Set()
+
+  while (queue.length && discoveredFiles.length < fileLimit) {
+    const { prefix: currentPrefix, depth } = queue.shift()
+    const cacheKey = `${currentPrefix}|${depth}`
+    if (visitedPrefixes.has(cacheKey)) continue
+    visitedPrefixes.add(cacheKey)
+
+    const { data, error } = await supabase.storage.from('Submissions').list(currentPrefix, {
+      limit: 100,
+      sortBy: { column: 'name', order: 'asc' },
+    })
+
+    if (error || !Array.isArray(data) || !data.length) {
+      continue
+    }
+
+    for (const entry of data) {
+      const entryName = String(entry?.name || '').trim()
+      if (!entryName) continue
+
+      const fullPath = currentPrefix ? `${currentPrefix}/${entryName}` : entryName
+      const isFile = Boolean(entry?.id || entry?.metadata)
+
+      if (isFile) {
+        discoveredFiles.push(fullPath)
+        if (discoveredFiles.length >= fileLimit) {
+          break
+        }
+        continue
+      }
+
+      if (depth < depthLimit) {
+        queue.push({ prefix: fullPath, depth: depth + 1 })
+      }
+    }
+  }
+
+  return discoveredFiles
+}
+
+async function downloadResolvedStorageBlob(objectPath) {
+  const normalizedPath = normalizeStoragePath(objectPath)
+  if (!normalizedPath) {
+    return { path: '', blob: null }
+  }
+
+  const directDownload = await supabase.storage.from('Submissions').download(normalizedPath)
+  if (!directDownload.error && directDownload.data) {
+    return { path: normalizedPath, blob: directDownload.data }
+  }
+
+  const candidatePrefixes = unique([
+    normalizedPath,
+    getParentStoragePrefix(normalizedPath),
+  ]).filter(Boolean)
+
+  let discoveredFiles = []
+
+  for (const prefix of candidatePrefixes) {
+    const listedFiles = await listStorageFilesRecursively(prefix)
+    if (listedFiles.length) {
+      discoveredFiles = discoveredFiles.concat(listedFiles)
+    }
+  }
+
+  const bestPath = unique(discoveredFiles)
+    .sort(
+      (left, right) =>
+        buildStorageCandidateScore(right, normalizedPath) -
+        buildStorageCandidateScore(left, normalizedPath)
+    )[0]
+
+  if (!bestPath) {
+    return { path: normalizedPath, blob: null }
+  }
+
+  const fallbackDownload = await supabase.storage.from('Submissions').download(bestPath)
+  if (fallbackDownload.error || !fallbackDownload.data) {
+    return { path: bestPath, blob: null }
+  }
+
+  return { path: bestPath, blob: fallbackDownload.data }
+}
+
 async function readStorageText(objectPath) {
   if (!objectPath) return ''
 
-  const { data, error } = await supabase.storage.from('Submissions').download(objectPath)
+  const { path: resolvedPath, blob: data } = await downloadResolvedStorageBlob(objectPath)
 
-  if (error || !data) {
+  if (!data) {
     return ''
+  }
+
+  const normalizedPath = String(resolvedPath || objectPath || '').toLowerCase()
+
+  if (normalizedPath.endsWith('.zip') || normalizedPath.includes('.zip.')) {
+    try {
+      const extractedText = await extractTextFromZipBlob(data)
+      if (extractedText) {
+        return extractedText
+      }
+    } catch {
+      // Fall through to plain-text read in case the file only looks like a zip by name.
+    }
   }
 
   const text = await data.text()
 
-  if (looksBinaryContent(objectPath, text)) {
-    return ''
+  if (looksBinaryContent(resolvedPath || objectPath, text)) {
+    try {
+      const extractedText = await extractTextFromZipBlob(data)
+      return extractedText || ''
+    } catch {
+      return ''
+    }
   }
 
   return text.replace(/\r\n/g, '\n')
+}
+
+function parseStoredSections(text) {
+  const normalizedText = String(text || '').trim()
+
+  if (!normalizedText) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(normalizedText)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((row, index) => ({
+          id: row.id ?? index + 1,
+          leftStartLine: Number(row.leftStartLine ?? row.file_1_start ?? row.submission_1_sec_start),
+          leftEndLine: Number(row.leftEndLine ?? row.file_1_end ?? row.submission_1_sec_end),
+          rightStartLine: Number(
+            row.rightStartLine ?? row.file_2_start ?? row.submission_2_sec_start
+          ),
+          rightEndLine: Number(
+            row.rightEndLine ?? row.file_2_end ?? row.submission_2_sec_end
+          ),
+        }))
+        .filter(
+          (row) =>
+            Number.isFinite(row.leftStartLine) &&
+            Number.isFinite(row.leftEndLine) &&
+            Number.isFinite(row.rightStartLine) &&
+            Number.isFinite(row.rightEndLine)
+        )
+    }
+  } catch {
+    // Fall through to CSV parsing.
+  }
+
+  const lines = normalizedText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const dataLines =
+    lines[0]?.toLowerCase().includes('file_1_start') || lines[0]?.toLowerCase().includes('left')
+      ? lines.slice(1)
+      : lines
+
+  return dataLines
+    .map((line, index) => {
+      const [leftStart, leftEnd, rightStart, rightEnd] = line
+        .split(',')
+        .map((value) => Number(value.trim()))
+
+      return {
+        id: index + 1,
+        leftStartLine: leftStart,
+        leftEndLine: leftEnd,
+        rightStartLine: rightStart,
+        rightEndLine: rightEnd,
+      }
+    })
+    .filter(
+      (row) =>
+        Number.isFinite(row.leftStartLine) &&
+        Number.isFinite(row.leftEndLine) &&
+        Number.isFinite(row.rightStartLine) &&
+        Number.isFinite(row.rightEndLine)
+    )
 }
 
 function buildNumericInFilter(values) {
@@ -216,11 +626,18 @@ async function loadAssignmentRunsByIds(assignmentRunIds) {
   if (error) throw error
 
   const assignmentMap = await loadAssignmentsByIds(unique((data || []).map((row) => row.assign_id)))
+  const repositoryMap = await loadRepositoriesByAssignmentRunIds(
+    unique((data || []).map((row) => row.assignment_run_id))
+  )
 
   return new Map(
     (data || []).map((row) => [
       String(row.assignment_run_id),
-      mapAssignmentRun(row, assignmentMap.get(String(row.assign_id))),
+      mapAssignmentRun(
+        row,
+        assignmentMap.get(String(row.assign_id)),
+        repositoryMap.get(String(row.assignment_run_id)) || null
+      ),
     ])
   )
 }
@@ -230,7 +647,9 @@ async function loadRepositoriesByIds(repositoryIds) {
 
   const { data, error } = await supabase
     .from('repositories')
-    .select('repository_id, assignment_run_id, repository_path')
+    .select(
+      'repository_id, assignment_run_id, repository_path, repository_name, is_default, created_at'
+    )
     .in('repository_id', repositoryIds)
 
   if (error) throw error
@@ -238,17 +657,123 @@ async function loadRepositoriesByIds(repositoryIds) {
   return new Map((data || []).map((row) => [String(row.repository_id), row]))
 }
 
-async function loadRepositoriesByAssignmentIds(assignmentIds) {
-  if (!assignmentIds.length) return new Map()
+async function loadRepositoriesByAssignmentRunIds(assignmentRunIds) {
+  if (!assignmentRunIds.length) return new Map()
 
   const { data, error } = await supabase
     .from('repositories')
-    .select('repository_id, assignment_run_id, repository_path')
-    .in('assignment_run_id', assignmentIds)
+    .select(
+      'repository_id, assignment_run_id, repository_path, repository_name, is_default, created_at'
+    )
+    .in('assignment_run_id', assignmentRunIds)
+
+  if (error) throw error
+
+  return (data || []).reduce((accumulator, row) => {
+    const key = String(row.assignment_run_id)
+    const existing = accumulator.get(key)
+    accumulator.set(key, pickPrimaryRepository([existing, row].filter(Boolean)))
+    return accumulator
+  }, new Map())
+}
+
+async function loadAllRepositoriesByAssignmentRunIds(assignmentRunIds) {
+  if (!assignmentRunIds.length) return new Map()
+
+  const { data, error } = await supabase
+    .from('repositories')
+    .select(
+      'repository_id, assignment_run_id, repository_path, repository_name, is_default, created_at'
+    )
+    .in('assignment_run_id', assignmentRunIds)
 
   if (error) throw error
 
   return new Map((data || []).map((row) => [String(row.repository_id), row]))
+}
+
+async function createDefaultRepositoryRecord(assignmentRunId) {
+  const { data: existingRows, error: existingError } = await supabase
+    .from('repositories')
+    .select(
+      'repository_id, assignment_run_id, repository_path, repository_name, is_default, created_at'
+    )
+    .eq('assignment_run_id', assignmentRunId)
+    .eq('is_default', true)
+    .limit(1)
+
+  if (existingError) {
+    throw existingError
+  }
+
+  if ((existingRows || []).length) {
+    return existingRows[0]
+  }
+
+  const { data, error } = await supabase
+    .from('repositories')
+    .insert({
+      assignment_run_id: assignmentRunId,
+      is_default: true,
+      repository_name: 'Default Repository',
+    })
+    .select(
+      'repository_id, assignment_run_id, repository_path, repository_name, is_default, created_at'
+    )
+    .single()
+
+  if (error || !data) {
+    throw error || new Error('Failed to create the default repository row.')
+  }
+
+  return data
+}
+
+async function loadCourseSubmissionDataset(courseId) {
+  const assignments = await fetchInstructorAssignments(courseId)
+
+  if (!assignments.length) {
+    return {
+      assignments: [],
+      assignmentMap: new Map(),
+      repositoriesMap: new Map(),
+      submissions: [],
+    }
+  }
+
+  const assignmentMap = new Map(
+    assignments.map((item) => [String(item.assignment_run_id), item])
+  )
+  const repositoriesMap = await loadAllRepositoriesByAssignmentRunIds(
+    assignments.map((item) => item.assignment_run_id)
+  )
+  const repositoryIds = Array.from(repositoriesMap.keys())
+
+  if (!repositoryIds.length) {
+    return {
+      assignments,
+      assignmentMap,
+      repositoriesMap,
+      submissions: [],
+    }
+  }
+
+  const { data: submissionRows, error: submissionsError } = await supabase
+    .from('submissions')
+    .select(
+      'submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path, test_flag'
+    )
+    .in('repository_id', repositoryIds)
+    .order('created_at', { ascending: false })
+
+  if (submissionsError) throw submissionsError
+
+  return {
+    assignments,
+    assignmentMap,
+    repositoriesMap,
+    submissions: submissionRows || [],
+  }
 }
 
 async function loadSubmissionsByIds(submissionIds) {
@@ -256,7 +781,9 @@ async function loadSubmissionsByIds(submissionIds) {
 
   const { data, error } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, student_id, folder_path, test_flag')
+    .select(
+      'submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path, test_flag'
+    )
     .in('submission_id', submissionIds)
 
   if (error) throw error
@@ -267,10 +794,13 @@ async function loadSubmissionsByIds(submissionIds) {
 async function loadResultsBySubmissionIds(submissionIds) {
   if (!submissionIds.length) return new Map()
 
+  const filterValues = buildNumericInFilter(submissionIds)
+  if (!filterValues) return new Map()
+
   const { data, error } = await supabase
     .from('results')
-    .select('submission_1, submission_2, score, pair_id, date_created')
-    .in('submission_1', submissionIds)
+    .select('submission_1, submission_2, score, pair_id, date_created, result_path')
+    .or(`submission_1.in.(${filterValues}),submission_2.in.(${filterValues})`)
 
   if (error) throw error
 
@@ -288,7 +818,13 @@ async function loadResultSections(pairId) {
     .eq('pair_id', pairId)
     .order('section_id', { ascending: true })
 
-  if (error) throw error
+  if (error) {
+    if (isMissingRelation(error, 'results_sections')) {
+      return []
+    }
+
+    throw error
+  }
 
   return (data || []).map((row) => ({
     id: row.section_id,
@@ -297,6 +833,18 @@ async function loadResultSections(pairId) {
     rightStartLine: row.submission_2_sec_start,
     rightEndLine: row.submission_2_sec_end,
   }))
+}
+
+async function loadComparisonSections(resultRow) {
+  if (!resultRow) return []
+
+  const directSections = await loadResultSections(resultRow.pair_id)
+
+  if (directSections.length || !resultRow.result_path) {
+    return directSections
+  }
+
+  return parseStoredSections(await readStorageText(resultRow.result_path))
 }
 
 async function removeSubmissionStorageObjects(storagePaths) {
@@ -317,24 +865,25 @@ async function deleteStoredComparisonRows(submissionIds) {
   const filterValues = buildNumericInFilter(submissionIds)
 
   if (!filterValues) {
-    return
+    return []
   }
 
   const submissionFilter = `submission_1.in.(${filterValues}),submission_2.in.(${filterValues})`
   const { data: resultRows, error: resultsLookupError } = await supabase
     .from('results')
-    .select('pair_id')
+    .select('pair_id, result_path')
     .or(submissionFilter)
 
   if (resultsLookupError) {
     if (isMissingRelation(resultsLookupError, 'results')) {
-      return
+      return []
     }
 
     throw resultsLookupError
   }
 
   const pairIds = unique((resultRows || []).map((row) => row.pair_id))
+  const resultPaths = unique((resultRows || []).map((row) => row.result_path))
 
   if (pairIds.length) {
     const { error: sectionsError } = await supabase
@@ -355,6 +904,8 @@ async function deleteStoredComparisonRows(submissionIds) {
   if (resultsDeleteError && !isMissingRelation(resultsDeleteError, 'results')) {
     throw resultsDeleteError
   }
+
+  return resultPaths
 }
 
 async function deleteAssignmentRunGraph(assignmentRunIds, options = {}) {
@@ -398,12 +949,12 @@ async function deleteAssignmentRunGraph(assignmentRunIds, options = {}) {
   }
 
   const submissionIds = unique(submissionRows.map((row) => row.submission_id))
+  const comparisonPaths = await deleteStoredComparisonRows(submissionIds)
   const storagePaths = unique([
     ...(repositoryRows || []).map((row) => row.repository_path),
     ...submissionRows.map((row) => row.folder_path),
+    ...comparisonPaths,
   ])
-
-  await deleteStoredComparisonRows(submissionIds)
 
   if (submissionIds.length) {
     const { error: submissionsDeleteError } = await supabase
@@ -532,7 +1083,17 @@ export async function fetchInstructorAssignments(courseId) {
 
   if (runsError) throw runsError
 
-  return (runRows || []).map((row) => mapAssignmentRun(row, assignmentMap.get(String(row.assign_id))))
+  const repositoryMap = await loadRepositoriesByAssignmentRunIds(
+    unique((runRows || []).map((row) => row.assignment_run_id))
+  )
+
+  return (runRows || []).map((row) =>
+    mapAssignmentRun(
+      row,
+      assignmentMap.get(String(row.assign_id)),
+      repositoryMap.get(String(row.assignment_run_id)) || null
+    )
+  )
 }
 
 export async function createInstructorAssignment({
@@ -570,7 +1131,22 @@ export async function createInstructorAssignment({
 
   if (assignmentRunError) throw assignmentRunError
 
-  return mapAssignmentRun(assignmentRun, assignment)
+  let defaultRepository = null
+
+  try {
+    defaultRepository = await createDefaultRepositoryRecord(assignmentRun.assignment_run_id)
+  } catch (repositoryError) {
+    await supabase
+      .from('assignment_runs')
+      .delete()
+      .eq('assignment_run_id', assignmentRun.assignment_run_id)
+
+    await supabase.from('assignments').delete().eq('assign_id', assignment.assign_id)
+
+    throw repositoryError
+  }
+
+  return mapAssignmentRun(assignmentRun, assignment, defaultRepository)
 }
 
 export async function updateInstructorAssignment({
@@ -701,36 +1277,23 @@ export async function fetchReviewQueue(courseId) {
   try {
     ensureSupabase()
 
-    const assignments = await fetchInstructorAssignments(courseId)
+    const { assignmentMap, repositoriesMap, submissions } = await loadCourseSubmissionDataset(courseId)
 
-    if (!assignments.length) {
+    if (!submissions.length) {
       return { submissions: [] }
     }
+    let resultsMap = new Map()
 
-    const assignmentMap = new Map(
-      assignments.map((item) => [String(item.assignment_run_id), item])
-    )
-    const repositoriesMap = await loadRepositoriesByAssignmentIds(
-      assignments.map((item) => item.assignment_run_id)
-    )
-    const repositoryIds = Array.from(repositoriesMap.keys())
-
-    if (!repositoryIds.length) {
-      return { submissions: [] }
+    try {
+      resultsMap = await loadResultsBySubmissionIds(
+        unique(submissions.map((row) => row.submission_id))
+      )
+    } catch (resultsError) {
+      console.warn(
+        'Stored results could not be loaded for the review queue. Showing submissions without similarity scores.',
+        resultsError
+      )
     }
-
-    const { data: submissionRows, error: submissionsError } = await supabase
-      .from('submissions')
-      .select('submission_id, created_at, repository_id, student_id, folder_path, test_flag')
-      .in('repository_id', repositoryIds)
-      .order('created_at', { ascending: false })
-
-    if (submissionsError) throw submissionsError
-
-    const submissions = submissionRows || []
-    const resultsMap = await loadResultsBySubmissionIds(
-      unique(submissions.map((row) => row.submission_id))
-    )
 
     return {
       submissions: submissions.map((submission) => {
@@ -743,41 +1306,68 @@ export async function fetchReviewQueue(courseId) {
 
         return {
           id: submission.submission_id,
-          studentName: mapUserName(submission, submission.student_id),
+          studentName: mapUserName(submission, submission.submission_id),
           assignmentName: assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
           language: assignment?.language || 'Unknown',
           similarityScore,
           status: getReviewStatus(similarityScore),
           analysisState: bestResult ? 'complete' : 'queued',
           repositoryKey: 'current',
-          repositoryLabel: buildRepositoryLabel(submission) || getRepositoryLabel('current'),
+          repositoryLabel: buildRepositoryName(repository) || buildRepositoryLabel(submission) || getRepositoryLabel('current'),
           excerpt: bestResult
-            ? `Highest recorded similarity is ${similarityScore}% against submission #${bestResult.submission_2}.`
+            ? `Highest recorded similarity is ${similarityScore}% against submission #${getCounterpartSubmissionId(bestResult, submission.submission_id)}.`
             : 'No stored comparison results are available for this submission yet.',
           submittedAt: formatShortTimestamp(submission.created_at),
         }
       }),
     }
   } catch (error) {
-    console.warn('Falling back to demo review queue.', error)
-    return getMockReviewQueue(courseId)
+    console.error('Failed to load review queue from live data.', error)
+    throw buildDataAccessError(error, 'Failed to load review queue from the database.')
   }
 }
 
 export async function fetchAnalytics(courseId) {
   try {
-    const [assignments, queueData] = await Promise.all([
-      fetchInstructorAssignments(courseId),
-      fetchReviewQueue(courseId),
-    ])
+    ensureSupabase()
 
-    const submissions = queueData.submissions || []
+    const { assignments, assignmentMap, repositoriesMap, submissions } =
+      await loadCourseSubmissionDataset(courseId)
     const totalSubmissions = submissions.length
-    const flaggedCases = submissions.filter((item) => item.status === 'Flagged').length
-    const reviewCases = submissions.filter((item) => item.status === 'Needs Review').length
+    let resultsMap = new Map()
+
+    try {
+      resultsMap = await loadResultsBySubmissionIds(
+        unique(submissions.map((row) => row.submission_id))
+      )
+    } catch (resultsError) {
+      console.warn(
+        'Stored results could not be loaded for analytics. Showing submission totals without similarity scores.',
+        resultsError
+      )
+    }
+
+    const queueLikeSubmissions = submissions.map((submission) => {
+      const repository = repositoriesMap.get(String(submission.repository_id))
+      const assignment = assignmentMap.get(String(repository?.assignment_run_id))
+      const bestResult = pickBestResult(resultsMap.get(String(submission.submission_id)) || [])
+      const similarityScore = Number.isFinite(Number(bestResult?.score))
+        ? Number(bestResult.score)
+        : null
+
+      return {
+        id: submission.submission_id,
+        language: assignment?.language || 'Unknown',
+        similarityScore,
+        status: getReviewStatus(similarityScore),
+      }
+    })
+
+    const flaggedCases = queueLikeSubmissions.filter((item) => item.status === 'Flagged').length
+    const reviewCases = queueLikeSubmissions.filter((item) => item.status === 'Needs Review').length
 
     const languageCounts = Object.entries(
-      submissions.reduce((accumulator, item) => {
+      queueLikeSubmissions.reduce((accumulator, item) => {
         const key = item.language || 'Unknown'
         accumulator[key] = (accumulator[key] || 0) + 1
         return accumulator
@@ -797,15 +1387,15 @@ export async function fetchAnalytics(courseId) {
         reviewCases,
         configuredRuns: assignments.length,
       },
-      priorityCases: [...submissions]
+      priorityCases: [...queueLikeSubmissions]
         .filter((item) => Number.isFinite(item.similarityScore))
         .sort((left, right) => (right.similarityScore || 0) - (left.similarityScore || 0))
         .slice(0, 5),
       languageCounts,
     }
   } catch (error) {
-    console.warn('Falling back to demo analytics.', error)
-    return getMockAnalytics(courseId)
+    console.error('Failed to load analytics from live data.', error)
+    throw buildDataAccessError(error, 'Failed to load analytics from the database.')
   }
 }
 
@@ -831,35 +1421,40 @@ export async function fetchSubmissionReport(submissionId) {
     const submissionResults = (resultsMap.get(String(submissionId)) || []).sort(
       (left, right) => Number(right.score || 0) - Number(left.score || 0)
     )
-    const sourceSubmissionIds = unique(submissionResults.map((row) => row.submission_2))
+    const sourceSubmissionIds = unique(
+      submissionResults.map((row) => getCounterpartSubmissionId(row, submissionId))
+    )
     const sourceSubmissionsMap = await loadSubmissionsByIds(sourceSubmissionIds)
     const assignment = assignmentRunsMap.get(String(repository?.assignment_run_id))
     const bestScore = Number.isFinite(Number(submissionResults[0]?.score))
       ? Number(submissionResults[0].score)
       : null
 
+    const fallbackAssignmentName = `Assignment #${repository?.assignment_run_id || submission.repository_id}`
+
     return {
       id: submission.submission_id,
-      studentName: mapUserName(submission, submission.student_id),
-      assignmentName: assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
+      studentName: mapUserName(submission, submission.submission_id),
+      assignmentName: assignment?.name || fallbackAssignmentName,
       language: assignment?.language || 'Unknown',
       submittedAt: formatShortTimestamp(submission.created_at),
       similarityScore: bestScore,
       status: getReviewStatus(bestScore),
       analysisState: submissionResults.length ? 'complete' : 'queued',
       summary: buildReportSummary(
-        assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
+        assignment?.name || fallbackAssignmentName,
         bestScore,
         submissionResults.length
       ),
       engineVersion: submissionResults.length ? 'Supabase results table' : null,
       matches: submissionResults.slice(0, 5).map((resultRow) => {
-        const sourceSubmission = sourceSubmissionsMap.get(String(resultRow.submission_2))
-        const sourceLabel = buildSourceLabel(sourceSubmission, resultRow.submission_2)
+        const sourceSubmissionId = getCounterpartSubmissionId(resultRow, submissionId)
+        const sourceSubmission = sourceSubmissionsMap.get(String(sourceSubmissionId))
+        const sourceLabel = buildSourceLabel(sourceSubmission, sourceSubmissionId)
 
         return {
           pairId: resultRow.pair_id,
-          sourceSubmissionId: resultRow.submission_2,
+          sourceSubmissionId,
           sourceLabel,
           score: Number(resultRow.score || 0),
           reason: `Stored result pair ${resultRow.pair_id} reports ${Number(
@@ -903,22 +1498,30 @@ export async function fetchSubmissionComparison(submissionId) {
       }
     }
 
-    const [sourceSubmissionMap, sections] = await Promise.all([
-      loadSubmissionsByIds([bestResult.submission_2]),
-      loadResultSections(bestResult.pair_id),
+    const sourceSubmissionId = getCounterpartSubmissionId(bestResult, submissionId)
+
+    const [sourceSubmissionMap, rawSections] = await Promise.all([
+      loadSubmissionsByIds([sourceSubmissionId]),
+      loadComparisonSections(bestResult),
     ])
 
-    const sourceSubmission = sourceSubmissionMap.get(String(bestResult.submission_2))
-    const sourceLabel = buildSourceLabel(sourceSubmission, bestResult.submission_2)
+    const sourceSubmission = sourceSubmissionMap.get(String(sourceSubmissionId))
+    const sourceLabel = buildSourceLabel(sourceSubmission, sourceSubmissionId)
+    const sections = orientSectionsForSubmission(rawSections, bestResult, submissionId)
 
     const [leftText, rightText] = await Promise.all([
       readStorageText(submission.folder_path),
       readStorageText(sourceSubmission?.folder_path),
     ])
+    const usedPlaceholderLeft = !leftText
+    const usedPlaceholderRight = !rightText
+    const missingSections = sections.length === 0
 
     const fallbackNotes =
       leftText && rightText
-        ? 'Highlighted lines come from the stored results_sections ranges when available.'
+        ? bestResult.result_path
+          ? 'Highlighted lines come from the stored result details saved for this comparison.'
+          : 'Highlighted lines come from the stored comparison ranges when available.'
         : 'Original file contents were not readable from storage, so this comparison view shows placeholder lines for the stored match ranges.'
 
     return {
@@ -929,6 +1532,9 @@ export async function fetchSubmissionComparison(submissionId) {
       analysisState: 'complete',
       leftText: leftText || buildPlaceholderCode('Current submission', sections, 'left'),
       rightText: rightText || buildPlaceholderCode(sourceLabel, sections, 'right'),
+      usedPlaceholderLeft,
+      usedPlaceholderRight,
+      missingSections,
       notes: fallbackNotes,
       sections,
       sectionsCsv: buildRangeCsv(sections),
@@ -942,11 +1548,8 @@ export async function fetchSubmissionComparison(submissionId) {
 async function downloadStorageBlob(objectPath) {
   if (!objectPath) return null
 
-  const { data, error } = await supabase.storage.from('Submissions').download(objectPath)
-
-  if (error || !data) return null
-
-  return data
+  const { blob } = await downloadResolvedStorageBlob(objectPath)
+  return blob
 }
 
 async function fetchExportData(assignmentRunId) {
@@ -967,7 +1570,9 @@ async function fetchExportData(assignmentRunId) {
 
   const { data: submissionRows, error: submissionsError } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, student_id, folder_path, test_flag')
+    .select(
+      'submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path, test_flag'
+    )
     .in('repository_id', repositoryIds)
     .order('created_at', { ascending: true })
 
@@ -981,8 +1586,17 @@ async function fetchExportData(assignmentRunId) {
   return { submissions, resultsMap }
 }
 
-function buildStudentFolderName(folderPath) {
-  const fileName = String(folderPath || '').split('/').filter(Boolean).pop()
+function buildStudentFolderName(submissionRow) {
+  const explicitParts = [
+    String(submissionRow?.student_first_name || '').trim(),
+    String(submissionRow?.student_last_name || '').trim(),
+  ].filter(Boolean)
+
+  if (explicitParts.length) {
+    return explicitParts.join('_').replace(/\s+/g, '_').toLowerCase()
+  }
+
+  const fileName = String(submissionRow?.folder_path || '').split('/').filter(Boolean).pop()
   if (!fileName) return null
 
   const match = fileName.match(/^([^_]+)_([^_]+)_\d+_/)
@@ -1023,7 +1637,7 @@ export async function buildAssignmentExportZip(assignment) {
   // Group submissions by student folder name, handling duplicates
   const folderCounts = new Map()
   const submissionEntries = submissions.map((submission) => {
-    let folderName = buildStudentFolderName(submission.folder_path) || `student_${submission.student_id}`
+    let folderName = buildStudentFolderName(submission) || `submission_${submission.submission_id}`
     const count = folderCounts.get(folderName) || 0
     folderCounts.set(folderName, count + 1)
     if (count > 0) {
@@ -1060,7 +1674,7 @@ export async function buildAssignmentExportZip(assignment) {
 
     // Build plagiarism result JSON
     const submissionResults = resultsMap.get(String(submission.submission_id)) || []
-    const studentName = parseStudentNameFromFolderPath(submission.folder_path) || `Student ${submission.student_id}`
+    const studentName = mapUserName(submission, submission.submission_id)
 
     const plagiarismResult = {
       submission_id: submission.submission_id,

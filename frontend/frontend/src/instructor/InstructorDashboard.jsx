@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth'
 import {
   UPLOAD_OPTIONS,
-  uploadSubmissionAsset,
+  uploadInstructorSourceAsset,
   validateSubmissionFile,
 } from '../lib/submissionUpload'
+import { generateAssignmentResult } from '../lib/analysisApi'
 import {
   buildAssignmentExportZip,
   createInstructorCourse,
@@ -21,9 +22,9 @@ import AnalyticsPanel from './AnalyticsPanel'
 import ReviewQueuePanel from './ReviewQueuePanel'
 import {
   formatDueDate,
+  formatShortTimestamp,
   getInitialPrivacyMode,
   persistPrivacyMode,
-  REPOSITORY_SCOPE_OPTIONS,
 } from './utils'
 
 function sortAssignments(assignments) {
@@ -75,14 +76,12 @@ export default function InstructorDashboard() {
   const [formDueDate, setFormDueDate] = useState('')
   const [formDueTime, setFormDueTime] = useState('')
   const [uploadingAssignment, setUploadingAssignment] = useState(null)
-  const [uploadFirstName, setUploadFirstName] = useState('')
-  const [uploadLastName, setUploadLastName] = useState('')
-  const [uploadEmail, setUploadEmail] = useState('')
   const [uploadFile, setUploadFile] = useState(null)
   const [uploadError, setUploadError] = useState('')
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [uploadLoading, setUploadLoading] = useState(false)
   const [exportingAssignmentId, setExportingAssignmentId] = useState(null)
+  const [generatingAssignmentId, setGeneratingAssignmentId] = useState('')
   const [activeTab, setActiveTab] = useState('assignments')
   const [submissions, setSubmissions] = useState([])
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
@@ -95,7 +94,6 @@ export default function InstructorDashboard() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsError, setAnalyticsError] = useState('')
   const [privacyMode, setPrivacyMode] = useState(getInitialPrivacyMode)
-  const [selectedRepositories, setSelectedRepositories] = useState(['current'])
 
   useEffect(() => {
     persistPrivacyMode(privacyMode)
@@ -280,9 +278,6 @@ export default function InstructorDashboard() {
   }
 
   const resetRepositoryUploadForm = () => {
-    setUploadFirstName('')
-    setUploadLastName('')
-    setUploadEmail('')
     setUploadFile(null)
     setUploadError('')
     setUploadSuccess('')
@@ -317,17 +312,6 @@ export default function InstructorDashboard() {
     const nextCourse =
       courses.find((course) => String(course.course_id) === event.target.value) ?? null
     handleCourseSelection(nextCourse)
-  }
-
-  const handleToggleRepositoryScope = (scopeId) => {
-    setSelectedRepositories((previous) => {
-      const exists = previous.includes(scopeId)
-      if (exists) {
-        return previous.length === 1 ? previous : previous.filter((item) => item !== scopeId)
-      }
-
-      return [...previous, scopeId]
-    })
   }
 
   const handleCourseFormSubmit = async () => {
@@ -426,6 +410,22 @@ export default function InstructorDashboard() {
       })
   }
 
+  const refreshAssignmentData = (courseId) => {
+    setAssignmentsLoading(true)
+
+    fetchInstructorAssignments(courseId)
+      .then((data) => {
+        setAssignments(sortAssignments(data))
+      })
+      .catch((error) => {
+        console.error(error)
+        setAssignments([])
+      })
+      .finally(() => {
+        setAssignmentsLoading(false)
+      })
+  }
+
   const refreshAnalyticsData = (courseId) => {
     setAnalyticsLoading(true)
     setAnalyticsError('')
@@ -452,19 +452,26 @@ export default function InstructorDashboard() {
       })
   }
 
-  const handleRepositoryUploadSubmit = async () => {
-    if (!uploadingAssignment) {
-      setUploadError('Select an assignment run first.')
+  const refreshCurrentCourseData = () => {
+    if (!selectedCourse?.course_id) {
       return
     }
 
-    if (!uploadFirstName || !uploadLastName || !uploadEmail) {
-      setUploadError('Please enter the student first name, last name, and email.')
+    refreshAssignmentData(selectedCourse.course_id)
+    refreshSubmissionData(selectedCourse.course_id)
+    refreshAnalyticsData(selectedCourse.course_id)
+  }
+
+  const handleRepositoryUploadSubmit = async () => {
+    if (!uploadingAssignment) {
+      setUploadSuccess('')
+      setUploadError('Select an assignment run first.')
       return
     }
 
     const nextError = validateSubmissionFile(uploadFile, 'repository')
     if (nextError) {
+      setUploadSuccess('')
       setUploadError(nextError)
       return
     }
@@ -474,16 +481,81 @@ export default function InstructorDashboard() {
     setUploadSuccess('')
 
     try {
-      await uploadSubmissionAsset({
+      const response = await uploadInstructorSourceAsset({
         assignmentRunId: uploadingAssignment.assignment_run_id,
-        firstName: uploadFirstName,
-        lastName: uploadLastName,
-        email: uploadEmail,
         file: uploadFile,
-        submissionKind: 'repository',
+        sourceKind: 'repository',
       })
 
-      setUploadSuccess('Repository uploaded successfully and saved to the database.')
+      const backendMessage = String(
+        response?.backendResponse?.message ||
+          response?.message ||
+          'Repository uploaded successfully for this assignment run.'
+      ).trim()
+      const syncedRepository = response?.repository || null
+      const repositoryIdMatch = backendMessage.match(/repository_id\s*=\s*(\d+)/i)
+      const filesUploadedMatch = backendMessage.match(/files_uploaded\s*=\s*(\d+)/i)
+      const repositoryId = syncedRepository?.repository_id ?? (repositoryIdMatch ? Number(repositoryIdMatch[1]) : null)
+      const filesUploaded = filesUploadedMatch ? Number(filesUploadedMatch[1]) : null
+
+      if (filesUploaded === 0) {
+        setUploadSuccess('')
+        setUploadError(
+          'The backend created the repository record, but it did not extract any files from this zip. Re-zip the repository folder and try again.'
+        )
+        return
+      }
+
+      setAssignments((previous) =>
+        sortAssignments(
+          previous.map((item) =>
+            item.assignment_run_id === uploadingAssignment.assignment_run_id
+              ? {
+                  ...item,
+                  repository_id: repositoryId ?? item.repository_id,
+                  repository_name:
+                    syncedRepository?.repository_name ||
+                    uploadFile?.name ||
+                    item.repository_name ||
+                    'Uploaded Repository',
+                  repository_path:
+                    syncedRepository?.repository_path || item.repository_path || uploadFile?.name || '',
+                  repository_created_at:
+                    syncedRepository?.created_at || new Date().toISOString(),
+                  is_default_repository: Boolean(syncedRepository?.is_default ?? true),
+                  has_repository: true,
+                }
+              : item
+          )
+        )
+      )
+
+      setUploadingAssignment((previous) =>
+        previous && previous.assignment_run_id === uploadingAssignment.assignment_run_id
+          ? {
+              ...previous,
+              repository_id: repositoryId ?? previous.repository_id,
+              repository_name:
+                syncedRepository?.repository_name ||
+                uploadFile?.name ||
+                previous.repository_name ||
+                'Uploaded Repository',
+              repository_path:
+                syncedRepository?.repository_path ||
+                previous.repository_path ||
+                uploadFile?.name ||
+                '',
+              repository_created_at:
+                syncedRepository?.created_at || new Date().toISOString(),
+              is_default_repository: Boolean(syncedRepository?.is_default ?? true),
+              has_repository: true,
+            }
+          : previous
+      )
+
+      setUploadError('')
+      setUploadSuccess(backendMessage)
+      setUploadFile(null)
 
       if (selectedCourse?.course_id) {
         refreshSubmissionData(selectedCourse.course_id)
@@ -491,7 +563,8 @@ export default function InstructorDashboard() {
       }
     } catch (error) {
       console.error(error)
-      setUploadError(error.message || 'Failed to upload repository.')
+      setUploadSuccess('')
+      setUploadError(error.message || 'Failed to upload source.')
     } finally {
       setUploadLoading(false)
     }
@@ -509,9 +582,47 @@ export default function InstructorDashboard() {
       setAssignments((previous) =>
         previous.filter((item) => item.assignment_run_id !== assignmentRunId)
       )
+      if (selectedCourse?.course_id) {
+        refreshSubmissionData(selectedCourse.course_id)
+        refreshAnalyticsData(selectedCourse.course_id)
+      }
     } catch (error) {
       console.error(error)
       window.alert(error.message || 'Failed to delete assignment.')
+    }
+  }
+
+  const handleGenerateResults = async (assignment) => {
+    if (!selectedCourse) {
+      window.alert('Select a course first.')
+      return
+    }
+
+    if (!assignment?.repository_id || !assignment?.has_repository) {
+      window.alert('Upload a repository for this assignment run before generating results.')
+      return
+    }
+
+    setGeneratingAssignmentId(String(assignment.assignment_run_id))
+
+    try {
+      const response = await generateAssignmentResult({
+        assignmentRunId: assignment.assignment_run_id,
+        repositoryId: assignment.repository_id,
+      })
+
+      refreshAssignmentData(selectedCourse.course_id)
+      refreshSubmissionData(selectedCourse.course_id)
+      refreshAnalyticsData(selectedCourse.course_id)
+      window.alert(
+        response?.message ||
+          `Analysis started for ${assignment.name}. Refresh the review queue in a moment if results take time to appear.`
+      )
+    } catch (error) {
+      console.error(error)
+      window.alert(error.message || 'Failed to start the analysis.')
+    } finally {
+      setGeneratingAssignmentId('')
     }
   }
 
@@ -588,8 +699,8 @@ export default function InstructorDashboard() {
         <div>
           <h1 className="instructor-title">Instructor Workspace</h1>
           <p className="instructor-subtitle">
-            Manage course offerings, review stored submission results, and inspect detailed
-            comparison data from the EL Kapitan instructor flow.
+            Manage course offerings, attach one repository source to each assignment run, and
+            review stored comparison results from the EL Kapitan instructor flow.
           </p>
           {user?.firstName && (
             <p className="teacherSectionMeta">Signed in as {user.firstName} {user.lastName}</p>
@@ -654,30 +765,23 @@ export default function InstructorDashboard() {
               </button>
             </div>
           </div>
-        </div>
 
-        <div className="scopeSection">
-          <div>
-            <p className="teacherEyebrow scopeEyebrow">Analysis Scope</p>
-            <p className="teacherSectionMeta">
-              Choose which repositories the instructor client should include in view filters.
-            </p>
-          </div>
-
-          <div className="scopeChipGrid">
-            {REPOSITORY_SCOPE_OPTIONS.map((option) => {
-              const active = selectedRepositories.includes(option.id)
-              return (
-                <button
-                  key={option.id}
-                  className={active ? 'scopeChip active' : 'scopeChip'}
-                  onClick={() => handleToggleRepositoryScope(option.id)}
-                >
-                  <strong>{option.label}</strong>
-                  <span>{option.note}</span>
-                </button>
-              )
-            })}
+          <div className="toolbarField">
+            <label>Data Refresh</label>
+            <button
+              className="teacherButton teacherButtonSecondary"
+              onClick={refreshCurrentCourseData}
+              disabled={
+                !selectedCourse ||
+                assignmentsLoading ||
+                submissionsLoading ||
+                analyticsLoading
+              }
+            >
+              {assignmentsLoading || submissionsLoading || analyticsLoading
+                ? 'Refreshing...'
+                : 'Refresh Data'}
+            </button>
           </div>
         </div>
       </div>
@@ -877,13 +981,31 @@ export default function InstructorDashboard() {
                           <h2 className="assignment-name">{item.name}</h2>
                           <p className="assignment-key">Key: {item.assignment_run_id}</p>
                           <p className="assignment-due">Due: {formatDueDate(item.due_date)}</p>
-                          <p className="assignment-preview">{item.description}</p>
+                          <p className="assignment-preview">
+                            {item.has_repository
+                              ? `Stored repository: ${item.repository_name}`
+                              : item.repository_id
+                                ? 'Default repository placeholder is ready. Upload the source archive to populate it.'
+                                : 'No repository source uploaded yet.'}
+                          </p>
+                          {item.repository_created_at && (
+                            <p className="teacherSectionMeta">
+                              Last upload: {formatShortTimestamp(item.repository_created_at)}
+                            </p>
+                          )}
                         </div>
 
                         <div className="assignment-card-right">
                           <span className="status-visible">{item.language === 'cpp' ? 'C++' : item.language === 'java' ? 'Java' : item.language?.toUpperCase()}</span>
                           <span className="status-hidden">
                             Top K {item.top_k} | Threshold {item.threshold}%
+                          </span>
+                          <span
+                            className={
+                              item.has_repository ? 'statusBadge status-complete' : 'statusBadge status-queued'
+                            }
+                          >
+                            {item.has_repository ? 'Repository Ready' : 'Repository Pending'}
                           </span>
 
                           <button className="btn-edit" onClick={() => openEditAssignmentForm(item)}>
@@ -902,6 +1024,19 @@ export default function InstructorDashboard() {
                             onClick={() => handleCopyKey(item.assignment_run_id)}
                           >
                             {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
+                          </button>
+
+                          <button
+                            className="btn-generate"
+                            onClick={() => handleGenerateResults(item)}
+                            disabled={
+                              generatingAssignmentId === String(item.assignment_run_id) ||
+                              !item.has_repository
+                            }
+                          >
+                            {generatingAssignmentId === String(item.assignment_run_id)
+                              ? 'Generating...'
+                              : 'Generate Result'}
                           </button>
 
                           <button
@@ -1026,7 +1161,8 @@ export default function InstructorDashboard() {
               <div className="teacherSectionHeaderInline">
                 <h3>Upload repository</h3>
                 <span className="teacherSectionMeta">
-                  Save a zipped student repository for {uploadingAssignment.name}.
+                  Store the single source repository for {uploadingAssignment.name}. The backend
+                  uses this repository when Generate Result is triggered.
                 </span>
               </div>
 
@@ -1035,41 +1171,6 @@ export default function InstructorDashboard() {
                 {uploadSuccess && (
                   <div className="upload-feedback upload-feedback-success">{uploadSuccess}</div>
                 )}
-
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label className="form-label">Student First Name</label>
-                    <input
-                      className="form-input"
-                      type="text"
-                      placeholder="Enter first name"
-                      value={uploadFirstName}
-                      onChange={(event) => setUploadFirstName(event.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Student Last Name</label>
-                    <input
-                      className="form-input"
-                      type="text"
-                      placeholder="Enter last name"
-                      value={uploadLastName}
-                      onChange={(event) => setUploadLastName(event.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Student Email</label>
-                  <input
-                    className="form-input"
-                    type="email"
-                    placeholder="student@school.edu"
-                    value={uploadEmail}
-                    onChange={(event) => setUploadEmail(event.target.value)}
-                  />
-                </div>
 
                 <div className="form-group">
                   <label className="form-label">{UPLOAD_OPTIONS.repository.label}</label>
@@ -1082,7 +1183,7 @@ export default function InstructorDashboard() {
                   <p className="upload-helper-text">
                     {uploadFile
                       ? `Selected file: ${uploadFile.name}`
-                      : UPLOAD_OPTIONS.repository.helperText}
+                      : 'Zip the repository first, then upload the archive here.'}
                   </p>
                 </div>
 
@@ -1116,7 +1217,6 @@ export default function InstructorDashboard() {
           loading={submissionsLoading}
           error={submissionsError}
           privacyMode={privacyMode}
-          selectedRepositories={selectedRepositories}
         />
       )}
 
@@ -1129,7 +1229,6 @@ export default function InstructorDashboard() {
           languageCounts={analytics.languageCounts}
           loading={analyticsLoading}
           error={analyticsError}
-          selectedRepositories={selectedRepositories}
         />
       )}
     </div>

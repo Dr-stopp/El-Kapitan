@@ -1,3 +1,5 @@
+export const DEFAULT_REPOSITORY_LABEL = 'Assignment Repository'
+
 export const REPOSITORY_SCOPE_OPTIONS = [
   {
     id: 'current',
@@ -113,6 +115,99 @@ export function formatAnalysisStateLabel(value = '') {
 
 const normalizeCodeLine = (line) => line.trim().replace(/\s+/g, ' ')
 
+function buildContiguousBlocksFromLines(lineModels = []) {
+  const blocks = []
+  let currentStart = null
+  let currentEnd = null
+
+  lineModels.forEach((line) => {
+    if (!line?.matched) {
+      if (currentStart !== null) {
+        blocks.push({ start: currentStart, end: currentEnd })
+        currentStart = null
+        currentEnd = null
+      }
+      return
+    }
+
+    if (currentStart === null) {
+      currentStart = line.number
+      currentEnd = line.number
+      return
+    }
+
+    if (line.number === currentEnd + 1) {
+      currentEnd = line.number
+      return
+    }
+
+    blocks.push({ start: currentStart, end: currentEnd })
+    currentStart = line.number
+    currentEnd = line.number
+  })
+
+  if (currentStart !== null) {
+    blocks.push({ start: currentStart, end: currentEnd })
+  }
+
+  return blocks
+}
+
+function buildMatchedBlocks(leftLines, rightLines, sections) {
+  if (Array.isArray(sections) && sections.length) {
+    return sections.map((section, index) => ({
+      id: section.id ?? `stored-${index + 1}`,
+      leftStartLine: section.leftStartLine,
+      leftEndLine: section.leftEndLine,
+      rightStartLine: section.rightStartLine,
+      rightEndLine: section.rightEndLine,
+      inferred: false,
+    }))
+  }
+
+  const leftBlocks = buildContiguousBlocksFromLines(leftLines)
+  const rightBlocks = buildContiguousBlocksFromLines(rightLines)
+  const totalBlocks = Math.max(leftBlocks.length, rightBlocks.length)
+
+  return Array.from({ length: totalBlocks }, (_, index) => {
+    const leftBlock = leftBlocks[index] || leftBlocks[leftBlocks.length - 1]
+    const rightBlock = rightBlocks[index] || rightBlocks[rightBlocks.length - 1]
+
+    return {
+      id: `inferred-${index + 1}`,
+      leftStartLine: leftBlock?.start ?? 1,
+      leftEndLine: leftBlock?.end ?? leftBlock?.start ?? 1,
+      rightStartLine: rightBlock?.start ?? 1,
+      rightEndLine: rightBlock?.end ?? rightBlock?.start ?? 1,
+      inferred: true,
+    }
+  }).filter(
+    (block) =>
+      Number.isFinite(Number(block.leftStartLine)) && Number.isFinite(Number(block.rightStartLine))
+  )
+}
+
+export function extractComparisonFileLabel(text = '', fallback = 'Source file') {
+  const candidateLines = String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+
+  for (const line of candidateLines) {
+    const beginFileMatch = line.match(/begin file:\s*(.+?)\s*=*$/i)
+    if (beginFileMatch?.[1]) {
+      return beginFileMatch[1].trim()
+    }
+
+    if (/^[\w.-]+\.[a-z0-9]+$/i.test(line)) {
+      return line
+    }
+  }
+
+  return fallback
+}
+
 export function buildComparisonViewModel(leftText = '', rightText = '', sections = []) {
   const leftRawLines = String(leftText || '').split('\n')
   const rightRawLines = String(rightText || '').split('\n')
@@ -154,10 +249,15 @@ export function buildComparisonViewModel(leftText = '', rightText = '', sections
       }
     })
 
+  const leftLines = toLineModels(leftRawLines, 'left')
+  const rightLines = toLineModels(rightRawLines, 'right')
+  const matchedBlocks = buildMatchedBlocks(leftLines, rightLines, sections)
+
   return {
-    leftLines: toLineModels(leftRawLines, 'left'),
-    rightLines: toLineModels(rightRawLines, 'right'),
+    leftLines,
+    rightLines,
     sharedLineCount: matchedLineNumbers.left.size || sharedLines.size,
     matchedSections: sections,
+    matchedBlocks,
   }
 }
