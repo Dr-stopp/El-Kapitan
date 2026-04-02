@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { fetchSubmissionComparison } from './api'
 import {
   buildComparisonViewModel,
@@ -136,7 +136,10 @@ function scrollPaneToLine(paneRef, lineNumber) {
 
 export default function SubmissionComparePage() {
   const { submissionId } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+
+  const pairId = searchParams.get('pairId')
 
   const [comparison, setComparison] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -151,7 +154,7 @@ export default function SubmissionComparePage() {
   useEffect(() => {
     let ignore = false
 
-    fetchSubmissionComparison(submissionId)
+    fetchSubmissionComparison(submissionId, { pairId })
       .then((data) => {
         if (!ignore) {
           setComparison(data)
@@ -172,7 +175,7 @@ export default function SubmissionComparePage() {
     return () => {
       ignore = true
     }
-  }, [submissionId])
+  }, [submissionId, pairId])
 
   const comparisonView = useMemo(
     () =>

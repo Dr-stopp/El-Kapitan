@@ -1467,7 +1467,7 @@ export async function fetchSubmissionReport(submissionId) {
   }
 }
 
-export async function fetchSubmissionComparison(submissionId) {
+export async function fetchSubmissionComparison(submissionId, { pairId } = {}) {
   try {
     ensureSupabase()
 
@@ -1479,7 +1479,10 @@ export async function fetchSubmissionComparison(submissionId) {
     }
 
     const resultsMap = await loadResultsBySubmissionIds([submissionId])
-    const bestResult = pickBestResult(resultsMap.get(String(submissionId)) || [])
+    const allResults = resultsMap.get(String(submissionId)) || []
+    const bestResult = pairId
+      ? allResults.find((r) => String(r.pair_id) === String(pairId)) || pickBestResult(allResults)
+      : pickBestResult(allResults)
 
     if (!bestResult) {
       return {

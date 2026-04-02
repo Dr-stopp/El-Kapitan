@@ -598,11 +598,23 @@
   background: rgba(255, 255, 255, 0.9);
 }
 
+.priorityActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 .priorityScore {
   font-size: 1.1rem;
   font-weight: 800;
   color: var(--el-text);
   white-space: nowrap;
+}
+
+.teacherButtonSmall {
+  padding: 4px 12px;
+  font-size: 0.8rem;
 }
 
 .reviewTableWrap,
