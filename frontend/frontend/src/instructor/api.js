@@ -1467,7 +1467,7 @@ export async function fetchSubmissionReport(submissionId) {
   }
 }
 
-export async function fetchSubmissionComparison(submissionId) {
+export async function fetchSubmissionComparison(submissionId, { pairId } = {}) {
   try {
     ensureSupabase()
 
@@ -1479,7 +1479,10 @@ export async function fetchSubmissionComparison(submissionId) {
     }
 
     const resultsMap = await loadResultsBySubmissionIds([submissionId])
-    const bestResult = pickBestResult(resultsMap.get(String(submissionId)) || [])
+    const allResults = resultsMap.get(String(submissionId)) || []
+    const bestResult = pairId
+      ? allResults.find((r) => String(r.pair_id) === String(pairId)) || pickBestResult(allResults)
+      : pickBestResult(allResults)
 
     if (!bestResult) {
       return {
@@ -1582,25 +1585,6 @@ async function fetchExportData(assignmentRunId) {
   return { submissions, resultsMap }
 }
 
-function buildStudentFolderName(submissionRow) {
-  const explicitParts = [
-    String(submissionRow?.student_first_name || '').trim(),
-    String(submissionRow?.student_last_name || '').trim(),
-  ].filter(Boolean)
-
-  if (explicitParts.length) {
-    return explicitParts.join('_').replace(/\s+/g, '_').toLowerCase()
-  }
-
-  const fileName = String(submissionRow?.folder_path || '').split('/').filter(Boolean).pop()
-  if (!fileName) return null
-
-  const match = fileName.match(/^([^_]+)_([^_]+)_\d+_/)
-  if (!match) return null
-
-  return `${match[1]}_${match[2]}`.toLowerCase()
-}
-
 function getFileNameFromPath(folderPath) {
   const segments = String(folderPath || '').split('/').filter(Boolean)
   return segments.length ? segments[segments.length - 1] : 'submission'
@@ -1628,72 +1612,39 @@ export async function buildAssignmentExportZip(assignment) {
   const { submissions, resultsMap } = await fetchExportData(assignment.assignment_run_id)
 
   const zip = new JSZip()
-  const submissionsFolder = zip.folder('submissions')
-
-  // Group submissions by student folder name, handling duplicates
-  const folderCounts = new Map()
-  const submissionEntries = submissions.map((submission) => {
-    let folderName = buildStudentFolderName(submission) || `submission_${submission.submission_id}`
-    const count = folderCounts.get(folderName) || 0
-    folderCounts.set(folderName, count + 1)
-    if (count > 0) {
-      folderName = `${folderName}_${submission.submission_id}`
-    }
-    return { submission, folderName }
-  })
 
   // Download all submission files in batches of 5
   const blobs = await batchProcess(
-    submissionEntries,
+    submissions,
     5,
-    async (entry) => downloadStorageBlob(entry.submission.folder_path)
+    async (submission) => downloadStorageBlob(submission.folder_path)
   )
 
-  // Build zip contents for each submission
+  // Build a ZIP per student submission + collect CSV rows
   const csvRows = []
 
-  for (let i = 0; i < submissionEntries.length; i++) {
-    const { submission, folderName } = submissionEntries[i]
-    const studentFolder = submissionsFolder.folder(folderName)
+  for (let i = 0; i < submissions.length; i++) {
+    const submission = submissions[i]
     const blobResult = blobs[i]
 
-    // Add submission file or error note
+    // Create an inner ZIP for this submission, named by submission_id
     if (blobResult.status === 'fulfilled' && blobResult.value) {
+      const innerZip = new JSZip()
       const fileName = getFileNameFromPath(submission.folder_path)
-      studentFolder.file(fileName, blobResult.value)
-    } else {
-      studentFolder.file(
-        'download_error.txt',
-        'The submitted file could not be retrieved from storage.'
-      )
+      innerZip.file(fileName, blobResult.value)
+      const innerBlob = await innerZip.generateAsync({ type: 'blob' })
+      zip.file(`${submission.submission_id}.zip`, innerBlob)
     }
-
-    // Build plagiarism result JSON
-    const submissionResults = resultsMap.get(String(submission.submission_id)) || []
-    const studentName = mapUserName(submission, submission.submission_id)
-
-    const plagiarismResult = {
-      submission_id: submission.submission_id,
-      student: studentName,
-      submitted_at: submission.created_at,
-      results: submissionResults.map((result) => ({
-        pair_id: result.pair_id,
-        compared_with: result.submission_2,
-        score: Number(result.score || 0),
-        date: result.date_created,
-      })),
-    }
-
-    studentFolder.file('plagiarism_result.json', JSON.stringify(plagiarismResult, null, 2))
 
     // Collect CSV row
+    const submissionResults = resultsMap.get(String(submission.submission_id)) || []
+    const studentName = mapUserName(submission, submission.submission_id)
     const bestResult = submissionResults.length
       ? submissionResults.reduce((best, r) => (Number(r.score || 0) > Number(best.score || 0) ? r : best), submissionResults[0])
       : null
 
     csvRows.push([
       studentName,
-      folderName,
       submission.submission_id,
       submission.created_at,
       bestResult ? Number(bestResult.score || 0) : '',
@@ -1702,15 +1653,8 @@ export async function buildAssignmentExportZip(assignment) {
     ])
   }
 
-  // Add previous_offerings placeholder
-  const prevFolder = zip.folder('previous_offerings')
-  prevFolder.file(
-    'README.txt',
-    'Previous Offerings\n\nThis folder is reserved for submissions from prior course offerings.\nThis feature is not yet available. When enabled, archived submissions\nused for cross-offering comparison will appear here.\n'
-  )
-
   // Build summary.csv
-  const csvHeader = 'student_name,student_folder,submission_id,submitted_at,highest_score,matched_submission_id,file_name'
+  const csvHeader = 'student_name,submission_id,submitted_at,highest_score,matched_submission_id,file_name'
   const csvBody = csvRows
     .map((row) => row.map(escapeCsvField).join(','))
     .join('\n')
@@ -1724,7 +1668,7 @@ export async function buildAssignmentExportZip(assignment) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${safeName}-export.zip`
+  link.download = `${safeName}.zip`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

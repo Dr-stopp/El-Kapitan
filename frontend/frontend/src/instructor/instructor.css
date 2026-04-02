@@ -598,11 +598,23 @@
   background: rgba(255, 255, 255, 0.9);
 }
 
+.priorityActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 .priorityScore {
   font-size: 1.1rem;
   font-weight: 800;
   color: var(--el-text);
   white-space: nowrap;
+}
+
+.teacherButtonSmall {
+  padding: 4px 12px;
+  font-size: 0.8rem;
 }
 
 .reviewTableWrap,
@@ -794,14 +806,17 @@
   font-size: 0.9rem;
 }
 
-.codeLine.matched {
-  background: rgba(224, 251, 252, 0.7);
+.codeLine.matchColored {
+  transition: box-shadow 0.15s ease;
 }
 
-.codeLine.activeMatch {
-  background: linear-gradient(90deg, rgba(121, 186, 205, 0.22), rgba(224, 251, 252, 0.92));
-  border-left: 4px solid var(--el-primary);
-  padding-left: 10px;
+.codeLine.matchEmphasis {
+  box-shadow: inset 0 0 0 2px var(--el-primary, #3498db);
+}
+
+.codeLine.matchDashed {
+  border-left: 3px dashed var(--el-text-muted, #888);
+  padding-left: 11px;
 }
 
 .codeLineNumber {
