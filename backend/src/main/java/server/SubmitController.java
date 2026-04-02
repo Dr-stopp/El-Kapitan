@@ -23,11 +23,13 @@ public class SubmitController {
     private final DBHandler dbHandler;
     private final resultsManager results;
     private static final Logger log = LoggerFactory.getLogger(SubmitController.class);
+    private final submissionEncryption encrypter;
 
-    public SubmitController(SupabaseStorageService storageService, DBHandler dbHandler) {
+    public SubmitController(SupabaseStorageService storageService, DBHandler dbHandler, submissionEncryption encrypter) {
         this.storageService = storageService;
         this.dbHandler = dbHandler;
         this.results = new resultsManager(storageService, dbHandler);
+        this.encrypter = encrypter;
     }
 
     @PostMapping(path = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -46,6 +48,7 @@ public class SubmitController {
             UUID assignmentRunId = UUID.fromString(assignment);
             String course = dbHandler.getCourse(assignmentRunId);
             String assignmentId = dbHandler.getAssignment(assignmentRunId);
+
             if (course == null || course.isBlank()) {
                 log.warn("No course found for assignment_run_id={}", assignment);
                 return ResponseEntity.badRequest().body("Unknown assignment_run_id: " + assignment);
@@ -54,18 +57,23 @@ public class SubmitController {
                 log.warn("No assignment found for assignment_run_id={}", assignment);
                 return ResponseEntity.badRequest().body("No assignment found for assignment_run_id: " + assignment);
             }
-            String studentName = studentFirst + "-" + studentLast;
-            Path fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, studentName + "-" + assignment);
+
+            String publicID = encrypter.generatePublicID(studentFirst, studentLast, studentEmail, assignment);
+            String firstEnc = encrypter.encryptString(studentFirst);
+            String lastEnc = encrypter.encryptString(studentLast);
+            String emailEnc = encrypter.encryptString(studentEmail);
+
+            Path fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, publicID + "-" + assignment);
             byte[] toUpload = Files.readAllBytes(fileToUpload);
             String contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
             String fileExt = dbHandler.getFileExt(assignment);
 
-            String objectPath = storageService.uploadSubmission(toUpload, contentType, studentName, assignmentId, assignment, course,"Submissions", fileExt);
+            String objectPath = storageService.uploadSubmission(toUpload, contentType, publicID, assignmentId, assignment, course,"Submissions", fileExt);
             log.info("Upload ok path={}", objectPath);
 
             boolean inserted = false;
             try {
-                dbHandler.insertSubmission(assignmentRunId, studentFirst, studentLast, studentEmail, objectPath);
+                dbHandler.insertSubmission(assignmentRunId, publicID, firstEnc, lastEnc, emailEnc, objectPath);
                 inserted = true;
             } catch (DataIntegrityViolationException dup) {
                 String root = dup.getMostSpecificCause() != null
@@ -74,7 +82,7 @@ public class SubmitController {
                 String normalized = root == null ? "" : root.toLowerCase();
                 if (normalized.contains("duplicate") || normalized.contains("unique")) {
                     // duplicate submission row: ignore, but keep request successful
-                    log.warn("Submission already exists for studentName={} assignment={}", studentName, assignment, dup);
+                    log.warn("Submission already exists for studentName={} assignment={}", publicID, assignment, dup);
                 } else {
                     throw dup;
                 }
