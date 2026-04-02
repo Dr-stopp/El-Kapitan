@@ -70,14 +70,18 @@ class MultiLangTokenizerTest {
     void throwsOnUnsupportedFileTypeWhenFileExists() throws Exception {
         MultiLangTokenizer tokenizer = new MultiLangTokenizer();
         Path tempUnsupported = Files.createTempFile("tokenizer-unsupported", ".txt");
-        Files.writeString(tempUnsupported, "plain text", StandardOpenOption.TRUNCATE_EXISTING);
+        try {
+            Files.writeString(tempUnsupported, "plain text", StandardOpenOption.TRUNCATE_EXISTING);
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> tokenizer.tokenize(tempUnsupported.toString())
-        );
+            IllegalArgumentException ex = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> tokenizer.tokenize(tempUnsupported.toString())
+            );
 
-        assertEquals("Unsupported file type", ex.getMessage());
+            assertEquals("Unsupported file type", ex.getMessage());
+        } finally {
+            Files.deleteIfExists(tempUnsupported);
+        }
     }
 
     @Test

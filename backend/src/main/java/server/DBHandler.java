@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -86,6 +87,7 @@ public class DBHandler {
     @Transactional
     public void insertSubmission(
             UUID assignmentRunId,
+            String publicID,
             String firstName,
             String lastName,
             String email,
@@ -96,11 +98,11 @@ public class DBHandler {
 
         String insertSql = """
         INSERT INTO public."submissions"
-        (student_first_name, student_last_name, student_email, folder_path, repository_id)
-        VALUES (?, ?, ?, ?, ?)
+        (public_id, student_first_name_enc, student_last_name_enc, student_email_enc, folder_path, repository_id)
+        VALUES (?, ?, ?, ?, ?, ?)
         """;
 
-        jdbc.update(insertSql, firstName, lastName, email, folderPath, repoId);
+        jdbc.update(insertSql, publicID, firstName, lastName, email, folderPath, repoId);
     }
 
     @Transactional
