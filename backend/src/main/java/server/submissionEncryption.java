@@ -64,4 +64,31 @@ public class submissionEncryption {
             throw new RuntimeException("Failed to encrypt PII", e);
         }
     }
+
+    public String decryptString(String encryptedValue) {
+        if (encryptedValue == null) {
+            return null;
+        }
+
+        try {
+            String[] parts = encryptedValue.split(":", 2);
+            if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+                throw new IllegalArgumentException("Encrypted value must be in 'iv:ciphertext' format");
+            }
+
+            byte[] iv = Base64.getDecoder().decode(parts[0]);
+            byte[] cipherText = Base64.getDecoder().decode(parts[1]);
+
+            byte[] keyBytes = Base64.getDecoder().decode(piiKey);
+            SecretKeySpec keySpec = new SecretKeySpec(keyBytes, "AES");
+
+            Cipher cipher = Cipher.getInstance(ENC_ALG);
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(TAG_LENGTH_BITS, iv));
+            byte[] plainText = cipher.doFinal(cipherText);
+
+            return new String(plainText, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to decrypt PII", e);
+        }
+    }
 }

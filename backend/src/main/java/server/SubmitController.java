@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,6 +44,7 @@ public class SubmitController {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body("No file uploaded");
         }
+        Path fileToUpload = null;
         try {
             log.info("Submit start studentFirst={} studentLast={} studentEmail={} assignment={}", studentFirst, studentLast, studentEmail, assignment);
             UUID assignmentRunId = UUID.fromString(assignment);
@@ -63,7 +65,7 @@ public class SubmitController {
             String lastEnc = encrypter.encryptString(studentLast);
             String emailEnc = encrypter.encryptString(studentEmail);
 
-            Path fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, publicID + "-" + assignment);
+            fileToUpload = zipProcessor.concatZipFromMultipartToTemp(file, publicID + "-" + assignment);
             byte[] toUpload = Files.readAllBytes(fileToUpload);
             String contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
             String fileExt = dbHandler.getFileExt(assignment);
@@ -99,6 +101,15 @@ public class SubmitController {
         }
         catch (Exception e) {
             return ResponseEntity.status(502).body("Upload failed: " + e.getMessage());
+        } finally {
+            if (fileToUpload != null) {
+                try {
+                    Files.deleteIfExists(fileToUpload);
+                } catch (IOException cleanupError) {
+                    log.warn("Failed to delete temp submission file {}", fileToUpload, cleanupError);
+                }
+            }
+            cleanupTempDirIfEmpty();
         }
 
     }
@@ -138,20 +149,29 @@ public class SubmitController {
             int uploadedFiles = 0;
             for (MultipartFile f : zipList) {
                 String sourceName = f.getName();
-
-
-                Path toSubmitPath = zipProcessor.concatZipFromMultipartToTemp(f, sourceName);
-                File toSubmitFile = toSubmitPath.toFile();
-                String objectPath = storageService.uploadRepository(
-                        toSubmitFile,
-                        course,
-                        assignmentId,
-                        assignmentRunId,
-                        repositoryID,
-                        "Submissions"
-                );
-                dbHandler.insertRepositorySubmission(repositoryID, objectPath);
-                uploadedFiles++;
+                Path toSubmitPath = null;
+                try {
+                    toSubmitPath = zipProcessor.concatZipFromMultipartToTemp(f, sourceName);
+                    File toSubmitFile = toSubmitPath.toFile();
+                    String objectPath = storageService.uploadRepository(
+                            toSubmitFile,
+                            course,
+                            assignmentId,
+                            assignmentRunId,
+                            repositoryID,
+                            "Submissions"
+                    );
+                    dbHandler.insertRepositorySubmission(repositoryID, objectPath);
+                    uploadedFiles++;
+                } finally {
+                    if (toSubmitPath != null) {
+                        try {
+                            Files.deleteIfExists(toSubmitPath);
+                        } catch (IOException cleanupError) {
+                            log.warn("Failed to delete temp repository file {}", toSubmitPath, cleanupError);
+                        }
+                    }
+                }
             }
             log.info("Files uploaded");
 
@@ -162,6 +182,22 @@ public class SubmitController {
         } catch (Exception e) {
             log.error("Repository processing failed", e);
             return ResponseEntity.status(500).body("Repository processing failed: " + e.getMessage());
+        } finally {
+            cleanupTempDirIfEmpty();
+        }
+    }
+
+    private void cleanupTempDirIfEmpty() {
+        Path tempDir = Paths.get("temp");
+        if (!Files.isDirectory(tempDir)) {
+            return;
+        }
+        try (var stream = Files.list(tempDir)) {
+            if (stream.findAny().isEmpty()) {
+                Files.deleteIfExists(tempDir);
+            }
+        } catch (IOException e) {
+            log.warn("Failed to clean temp directory {}", tempDir, e);
         }
     }
 
