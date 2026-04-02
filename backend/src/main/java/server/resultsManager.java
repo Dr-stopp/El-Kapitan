@@ -1,97 +1,84 @@
 package server;
 
+import Tokenizer.src.MatchNode;
 import Tokenizer.src.PlagiarismChecker;
+import Tokenizer.src.PlagiarismResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 
 public class resultsManager {
     private static final Logger log = LoggerFactory.getLogger(resultsManager.class);
     private final SupabaseStorageService storageService;
     private final DBHandler dbHandler;
-    private final String BUCKET;
+    private final String SUBMISSIONBUCKET;
+    private final String RESULTBUCKET;
     public resultsManager(SupabaseStorageService storageService, DBHandler dbHandler) {
         this.storageService = storageService;
         this.dbHandler = dbHandler;
-        BUCKET = "Submissions";
+        SUBMISSIONBUCKET = "Submissions";
+        RESULTBUCKET = "Results";
     }
-    public void generateResults(MultipartFile file, String course, long assignment, long submissionID) throws IOException {
+    public void generateResults(UUID assignmentRunID, long repositoryID) throws IOException {
         log.info("Generating Results:");
-        String prefix = course + "/" + assignment;
-        List<File> files = loadFiles(course, assignment, BUCKET, prefix);
-        List<Long> scores = new LinkedList<Long>();
-        Path p1 = zipProcessor.concatZipFromMultipartToTemp(file, "baseFile");;
-        File f1 = p1.toFile();
-        log.info("Running comparison on " + files.size() + " files.");
-        int topK = dbHandler.getTopK(assignment);
-        int i = 1;
+        String lang = dbHandler.getLang(assignmentRunID);
+        List<submission_rec> submissions = loadFiles(SUBMISSIONBUCKET, dbHandler.getDefaultRepo(assignmentRunID), lang);
+        List<submission_rec> repo = loadFiles(SUBMISSIONBUCKET, repositoryID, lang);
+        List<Long> scores = new LinkedList<>();
+        //int topK = dbHandler.getTopK(assignmentRunID);
+        log.info("Running comparison for " + submissions.size() + " files. On " + repo.size() + " files.");
+        int i = 0;
 
-        for (File f : files) {
-            try {
-                log.info("Starting checker on file index={} name={}", i, f.getName());
-                PlagiarismChecker pc = new PlagiarismChecker(f1, f);
-                scores.add(pc.index);
+        for (submission_rec s: submissions) {
+            for (submission_rec rs : repo) {
+                try {
+                    dbHandler.checkPairExists(s.submission_ID, rs.submission_ID);
+                    PlagiarismChecker pc = new PlagiarismChecker(s.file, rs.file);
+                    scores.add((long) pc.PlagarismInfo.similarity*100);
+                    String resultPath = resultsSections(pc.PlagarismInfo, assignmentRunID, repositoryID, s.submission_ID, rs.submission_ID);
+                    log.info(String.valueOf(pc.PlagarismInfo.similarity));
+                    dbHandler.insertResult(s.submission_ID,rs.submission_ID,(long) (pc.PlagarismInfo.similarity*100) , OffsetDateTime.now(), dbHandler.generateResultID(), resultPath);
 
-                log.info("Checker completed on file index={}", i);
-            } catch (Exception e) {
-                log.error("Checker failed on file index={} name={}", i, f.getName(), e);
-                throw e; // keep failing fast so submit returns error
+                } catch (Exception e) {
+                    log.error("Checker failed on file index={} name={}", i, s.file.getName(), e);
+                    throw e; // keep failing fast so submit returns error
+                }
+                i++;
             }
-            i++;
+            //int[] toSubmit = getTopScores(topK, scores);
+            //for (int j = 0; j < topK; j++) {
+            //    dbHandler.insertResult(s.submission_ID,,scores.get(toSubmit[j]), OffsetDateTime.now(), dbHandler.generateResultID());
+            //}
         }
-        int[] toSubmit = getTopScores(topK, scores);
-        for (int j = 0; j < topK; j++) {
-            dbHandler.insertResult(submissionID, j+1, scores.get(toSubmit[j]), OffsetDateTime.now(), dbHandler.generateResultID());
-        }
+
         log.info("All comparisons complete");
-        Path temp = Path.of("temp");
-        try (var walk = Files.walk(temp)) {
-            walk.sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
-        }
-        log.info("Temp files deleted");
+        log.info("Results generated");
     }
 
-    private List<File> loadFiles(String course, long assignment, String bucket, String prefix) throws IOException {
-        List<File> files = new LinkedList<>();
+    private List<submission_rec> loadFiles(String bucket, long repositoryID, String language) throws IOException {
+        List<submission_rec> files = new LinkedList<>();
+        List<submission_rec> toLoad = dbHandler.getSubmissions(repositoryID);
+        String suffix = "." + language;
+        log.info("Suffix: " + suffix);
 
-        List<String> allPaths = storageService.listAllFiles(prefix, bucket);
-        int i = 1;
+        for (submission_rec sr: toLoad) {
+            byte[] content = storageService.downloadFile(sr.filePath, bucket);
 
-        for (String objectPath : allPaths) {
-            // adjust this filter if your uploaded extension changes
-            if (!objectPath.toLowerCase().endsWith(".bin")) continue;
-
-            byte[] content = storageService.downloadFile(objectPath, bucket);
-
-            MultipartFile mf = new MockMultipartFile(
-                    "file",
-                    Path.of(objectPath).getFileName().toString(),
-                    "application/zip",
-                    content
-            );
-
-            Path tempPath = zipProcessor.concatZipFromMultipartToTemp(mf, "file" + i);
-            files.add(tempPath.toFile());
-            i++;
+            Path temp = Files.createTempFile("results-", suffix);
+            Files.write(temp, content, StandardOpenOption.TRUNCATE_EXISTING);
+            File file = temp.toFile();
+            submission_rec currSub = new submission_rec(sr.submission_ID, sr.filePath, file);
+            files.add(currSub);
         }
 
         return files;
@@ -117,4 +104,29 @@ public class resultsManager {
         }
         return toReturn;
     }
+
+    private String resultsSections(PlagiarismResult info, UUID assignmentRunID, long repositoryID, long s1, long s2) {
+        List<MatchNode> matchNodes = (info == null || info.matches == null) ? List.of() : info.matches;
+        try {
+            Path csvPath = Files.createTempFile("results-sections-", ".csv");
+            StringBuilder csv = new StringBuilder();
+            csv.append("F1start,F1end,F2start,F2End").append(System.lineSeparator());
+
+            for (MatchNode m : matchNodes) {
+                csv.append(m.file1Start).append(",")
+                        .append(m.file1End).append(",")
+                        .append(m.file2Start).append(",")
+                        .append(m.file2End)
+                        .append(System.lineSeparator());
+            }
+
+            Files.writeString(csvPath, csv.toString(), StandardOpenOption.TRUNCATE_EXISTING);
+            File toSubmit = csvPath.toFile();
+            return storageService.uploadResult(toSubmit, assignmentRunID, repositoryID, s1, s2, RESULTBUCKET);
+
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create results CSV", e);
+        }
+    }
+
 }

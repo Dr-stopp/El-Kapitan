@@ -1,6 +1,5 @@
 package server;
 
-import com.fasterxml.jackson.core.ObjectCodec;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -9,11 +8,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatusCode;
@@ -39,23 +41,29 @@ public class SupabaseStorageService {
                 .build();
     }
 
-    public String upload(MultipartFile file, long student, long assignment, String course, String bucket) throws Exception {
-        String fileName = student + "-" + assignment + ".bin";
+    public String uploadSubmission(MultipartFile file, String studentName, String assignment, String assignmentRun, String course, String bucket, String fileExt) throws Exception {
+        String contentType = file.getContentType();
+        byte[] fileBytes = file.getBytes();
+        return uploadSubmission(fileBytes, contentType, studentName, assignment, assignmentRun, course, bucket, fileExt);
+    }
 
-        String objectPath =  course + "/" + assignment + "/" + sanitizeObjectName(fileName);
+    public String uploadSubmission(byte[] fileBytes, String contentType, String studentName, String assignment, String assignmentRun, String course, String bucket, String fileExt) throws Exception {
+        String extension = (fileExt == null || fileExt.isBlank()) ? ".bin" : fileExt;
+        String fileName = studentName + "-" + assignmentRun + extension;
+        String objectPath =  course + "/" + assignment + "/" + assignmentRun + "/default/" + sanitizeObjectName(fileName);
 
         String endpoint = "/storage/v1/object/" + bucket + "/" + urlPathEncode(objectPath);
 
-        MediaType contentType = (file.getContentType() != null)
-                ? MediaType.parseMediaType(file.getContentType())
+        MediaType mediaType = (contentType != null && !contentType.isBlank())
+                ? MediaType.parseMediaType(contentType)
                 : MediaType.APPLICATION_OCTET_STREAM;
 
         // Supabase returns JSON sometimes; you can capture it if you want.
         webClient.post()
                 .uri(endpoint)
                 .header("x-upsert", "true")
-                .header(HttpHeaders.CONTENT_TYPE, contentType.toString())
-                .bodyValue(file.getBytes())
+                .header(HttpHeaders.CONTENT_TYPE, mediaType.toString())
+                .bodyValue(fileBytes)
                 .retrieve()
                 .toBodilessEntity()
                 .block();
@@ -63,6 +71,58 @@ public class SupabaseStorageService {
         return objectPath;
     }
 
+    public String uploadResult(File toUpload, UUID assignmentRunID, long repositoryID, long s1, long s2, String bucket) {
+        String fileName = s1 + "-" + s2 + ".csv";
+        String objectPath = assignmentRunID + "/" + repositoryID + "/" + sanitizeObjectName(fileName);
+        String endpoint = "/storage/v1/object/" + bucket + "/" + urlPathEncode(objectPath);
+
+        try {
+            byte[] fileBytes = Files.readAllBytes(toUpload.toPath());
+            webClient.post()
+                    .uri(endpoint)
+                    .header("x-upsert", "true")
+                    .header(HttpHeaders.CONTENT_TYPE, "text/csv")
+                    .bodyValue(fileBytes)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
+
+            return objectPath;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read result file for upload: " + toUpload.getAbsolutePath(), e);
+        }
+    }
+
+    public String uploadRepository(
+            File toUpload,
+            String course,
+            String assignment,
+            UUID assignmentRunID,
+            long repositoryID,
+            String bucket
+    ) {
+        String objectPath = course + "/" + assignment + "/" + assignmentRunID + "/" + repositoryID + "/" + sanitizeObjectName(toUpload.getName());
+        return uploadRepositoryFile(toUpload, objectPath, bucket);
+    }
+
+    public String uploadRepositoryFile(File toUpload, String objectPath, String bucket) {
+        String endpoint = "/storage/v1/object/" + bucket + "/" + urlPathEncode(objectPath);
+        try {
+            byte[] fileBytes = Files.readAllBytes(toUpload.toPath());
+            webClient.post()
+                    .uri(endpoint)
+                    .header("x-upsert", "true")
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE)
+                    .bodyValue(fileBytes)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
+
+            return objectPath;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read repository file for upload: " + toUpload.getAbsolutePath(), e);
+        }
+    }
     private static String sanitizeObjectName(String name) {
         String n = name.replace("\\", "/");
         int slash = n.lastIndexOf('/');
