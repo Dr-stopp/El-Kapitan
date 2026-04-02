@@ -29,15 +29,12 @@ function mergeRanges(ranges) {
   return merged
 }
 
-function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, contextLines = 2) {
+function buildRenderedRows(lines, matchedBlocks, viewMode, side, contextLines = 2) {
   if (viewMode === 'full' || !matchedBlocks.length) {
     return lines.map((line) => ({
       type: 'line',
       line,
-      active:
-        activeIndex >= 0 &&
-        line.number >= matchedBlocks[activeIndex]?.[`${side}StartLine`] &&
-        line.number <= matchedBlocks[activeIndex]?.[`${side}EndLine`],
+      blockIndex: findBlockIndex(line.number, matchedBlocks, side),
     }))
   }
 
@@ -61,7 +58,7 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, co
       rows.push({
         type: 'line',
         line: firstLine,
-        active: false,
+        blockIndex: -1,
       })
       if (lines.length > 1) {
         rows.push({
@@ -79,15 +76,10 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, co
     )
 
     slicedLines.forEach((line) => {
-      const active =
-        activeIndex >= 0 &&
-        line.number >= matchedBlocks[activeIndex]?.[`${side}StartLine`] &&
-        line.number <= matchedBlocks[activeIndex]?.[`${side}EndLine`]
-
       rows.push({
         type: 'line',
         line,
-        active,
+        blockIndex: findBlockIndex(line.number, matchedBlocks, side),
       })
     })
 
@@ -107,7 +99,7 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, co
     return lines.map((line) => ({
       type: 'line',
       line,
-      active: false,
+      blockIndex: -1,
     }))
   }
 
@@ -121,6 +113,31 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, co
   }
 
   return rows
+}
+
+const MATCH_PALETTE = [
+  'rgba(100, 181, 246, 0.35)',
+  'rgba(129, 199, 132, 0.35)',
+  'rgba(255, 183, 77, 0.35)',
+  'rgba(186, 104, 200, 0.30)',
+  'rgba(240, 98, 146, 0.30)',
+  'rgba(77, 208, 225, 0.35)',
+  'rgba(255, 213, 79, 0.35)',
+  'rgba(161, 136, 127, 0.35)',
+  'rgba(121, 134, 203, 0.35)',
+  'rgba(174, 213, 129, 0.35)',
+  'rgba(255, 138, 128, 0.35)',
+  'rgba(128, 203, 196, 0.35)',
+]
+
+function findBlockIndex(lineNumber, matchedBlocks, side) {
+  for (let i = 0; i < matchedBlocks.length; i++) {
+    const block = matchedBlocks[i]
+    if (lineNumber >= block[`${side}StartLine`] && lineNumber <= block[`${side}EndLine`]) {
+      return i
+    }
+  }
+  return -1
 }
 
 function scrollPaneToLine(paneRef, lineNumber) {
@@ -146,6 +163,7 @@ export default function SubmissionComparePage() {
   const [error, setError] = useState('')
   const [viewMode, setViewMode] = useState('full')
   const [activeBlockIndex, setActiveBlockIndex] = useState(0)
+  const [hoveredBlockIndex, setHoveredBlockIndex] = useState(-1)
 
   const leftPaneRef = useRef(null)
   const rightPaneRef = useRef(null)
@@ -211,15 +229,9 @@ export default function SubmissionComparePage() {
         comparisonView.leftLines,
         comparisonView.matchedBlocks,
         viewMode,
-        effectiveActiveBlockIndex,
         'left'
       ),
-    [
-      comparisonView.leftLines,
-      comparisonView.matchedBlocks,
-      effectiveActiveBlockIndex,
-      viewMode,
-    ]
+    [comparisonView.leftLines, comparisonView.matchedBlocks, viewMode]
   )
 
   const rightRenderedRows = useMemo(
@@ -228,15 +240,9 @@ export default function SubmissionComparePage() {
         comparisonView.rightLines,
         comparisonView.matchedBlocks,
         viewMode,
-        effectiveActiveBlockIndex,
         'right'
       ),
-    [
-      comparisonView.matchedBlocks,
-      comparisonView.rightLines,
-      effectiveActiveBlockIndex,
-      viewMode,
-    ]
+    [comparisonView.rightLines, comparisonView.matchedBlocks, viewMode]
   )
 
   useEffect(() => {
@@ -406,23 +412,31 @@ export default function SubmissionComparePage() {
                     ref={leftPaneRef}
                     className="codePane"
                   >
-                    {leftRenderedRows.map((row) =>
-                      row.type === 'gap' ? (
-                        <div key={row.id} className="codeGap">
-                          <span>...</span>
-                          <span>{row.hiddenCount} line(s) hidden</span>
-                        </div>
-                      ) : (
+                    {leftRenderedRows.map((row) => {
+                      if (row.type === 'gap') {
+                        return (
+                          <div key={row.id} className="codeGap">
+                            <span>...</span>
+                            <span>{row.hiddenCount} line(s) hidden</span>
+                          </div>
+                        )
+                      }
+                      const bi = row.blockIndex
+                      const emphasized = bi >= 0 && (bi === hoveredBlockIndex || bi === effectiveActiveBlockIndex)
+                      return (
                         <div
                           key={`left-${row.line.number}`}
-                          className={`codeLine${row.line.matched ? ' matched' : ''}${row.active ? ' activeMatch' : ''}`}
+                          className={`codeLine${bi >= 0 ? ' matchColored' : ''}${emphasized ? ' matchEmphasis' : ''}${bi >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
+                          style={bi >= 0 ? { backgroundColor: MATCH_PALETTE[bi % MATCH_PALETTE.length] } : undefined}
                           data-line-number={row.line.number}
+                          onMouseEnter={bi >= 0 ? () => setHoveredBlockIndex(bi) : undefined}
+                          onMouseLeave={bi >= 0 ? () => setHoveredBlockIndex(-1) : undefined}
                         >
                           <span className="codeLineNumber">{row.line.number}</span>
                           <span className="codeLineText">{row.line.text || ' '}</span>
                         </div>
                       )
-                    )}
+                    })}
                   </div>
                 )}
               </div>
@@ -448,23 +462,31 @@ export default function SubmissionComparePage() {
                     ref={rightPaneRef}
                     className="codePane"
                   >
-                    {rightRenderedRows.map((row) =>
-                      row.type === 'gap' ? (
-                        <div key={row.id} className="codeGap">
-                          <span>...</span>
-                          <span>{row.hiddenCount} line(s) hidden</span>
-                        </div>
-                      ) : (
+                    {rightRenderedRows.map((row) => {
+                      if (row.type === 'gap') {
+                        return (
+                          <div key={row.id} className="codeGap">
+                            <span>...</span>
+                            <span>{row.hiddenCount} line(s) hidden</span>
+                          </div>
+                        )
+                      }
+                      const bi = row.blockIndex
+                      const emphasized = bi >= 0 && (bi === hoveredBlockIndex || bi === effectiveActiveBlockIndex)
+                      return (
                         <div
                           key={`right-${row.line.number}`}
-                          className={`codeLine${row.line.matched ? ' matched' : ''}${row.active ? ' activeMatch' : ''}`}
+                          className={`codeLine${bi >= 0 ? ' matchColored' : ''}${emphasized ? ' matchEmphasis' : ''}${bi >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
+                          style={bi >= 0 ? { backgroundColor: MATCH_PALETTE[bi % MATCH_PALETTE.length] } : undefined}
                           data-line-number={row.line.number}
+                          onMouseEnter={bi >= 0 ? () => setHoveredBlockIndex(bi) : undefined}
+                          onMouseLeave={bi >= 0 ? () => setHoveredBlockIndex(-1) : undefined}
                         >
                           <span className="codeLineNumber">{row.line.number}</span>
                           <span className="codeLineText">{row.line.text || ' '}</span>
                         </div>
                       )
-                    )}
+                    })}
                   </div>
                 )}
               </div>
