@@ -1,27 +1,4 @@
-export const DEFAULT_REPOSITORY_LABEL = 'Assignment Repository'
-
-export const REPOSITORY_SCOPE_OPTIONS = [
-  {
-    id: 'current',
-    label: 'Current Course',
-    note: 'Review submissions stored for the active offering.',
-  },
-  {
-    id: 'archive',
-    label: 'Previous Offerings',
-    note: 'Use archived course data when those repositories are added.',
-  },
-  {
-    id: 'secondary',
-    label: 'Secondary Repository',
-    note: 'Reserve space for department-maintained reference repos.',
-  },
-  {
-    id: 'public',
-    label: 'Public Samples',
-    note: 'Track overlap against curated public examples when available.',
-  },
-]
+export const DEFAULT_REPOSITORY_LABEL = 'Course Repository'
 
 const PRIVACY_STORAGE_KEY = 'elkapitan-instructor-privacy-mode'
 
@@ -62,11 +39,8 @@ export function formatShortTimestamp(value) {
   })
 }
 
-export function getRepositoryLabel(repositoryKey) {
-  return (
-    REPOSITORY_SCOPE_OPTIONS.find((option) => option.id === repositoryKey)?.label ||
-    'Current Course'
-  )
+export function getRepositoryLabel() {
+  return DEFAULT_REPOSITORY_LABEL
 }
 
 export function getInitialPrivacyMode() {

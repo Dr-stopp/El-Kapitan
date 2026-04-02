@@ -45,7 +45,7 @@ export default function ReviewQueuePanel({
         ...item,
         analysisState: normalizeAnalysisState(item.analysisState),
         displayStudentName: getDisplayStudentName(item.studentName, item.id, privacyMode),
-        repositoryLabel: item.repositoryLabel || 'Repository',
+        repositoryLabel: item.repositoryLabel || 'Course Repository',
       }))
   }, [availableAssignmentNames, privacyMode, selectedCourse, submissions])
 
@@ -175,7 +175,7 @@ export default function ReviewQueuePanel({
                   <input
                     className="teacherInput"
                     type="text"
-                    placeholder="Search by student label, assignment, language, or repository"
+                    placeholder="Search by student label, assignment, language, or course repository"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
@@ -244,7 +244,7 @@ export default function ReviewQueuePanel({
                       <tr>
                         <th>Student</th>
                         <th>Assignment</th>
-                        <th>Repository</th>
+                        <th>Course Repository</th>
                         <th>Language</th>
                         <th>Similarity</th>
                         <th>Analysis</th>
@@ -321,7 +321,7 @@ export default function ReviewQueuePanel({
                     <strong>{selectedSubmission.assignmentName}</strong>
                   </div>
                   <div className="detailRow">
-                    <span>Repository</span>
+                    <span>Course Repository</span>
                     <strong>{selectedSubmission.repositoryLabel}</strong>
                   </div>
                   <div className="detailRow">
