@@ -4,7 +4,7 @@ import {
   getMockSubmissionReport,
 } from './mockData'
 import JSZip from 'jszip'
-import { DEFAULT_REPOSITORY_LABEL, formatShortTimestamp, getRepositoryLabel } from './utils'
+import { DEFAULT_REPOSITORY_LABEL, formatShortTimestamp } from './utils'
 
 function ensureSupabase() {
   if (!supabase) {
@@ -258,7 +258,7 @@ function parseStudentNameFromFolderPath(folderPath) {
 }
 
 function buildRepositoryLabel(submissionRow) {
-  return submissionRow?.test_flag === 'repository' ? 'Repository Upload' : 'Code File'
+  return submissionRow?.test_flag === 'repository' ? 'Course Repository Upload' : 'Code File'
 }
 
 function buildSourceLabel(submissionRow, submissionId) {
@@ -714,6 +714,7 @@ async function createDefaultRepositoryRecord(assignmentRunId) {
     .from('repositories')
     .insert({
       assignment_run_id: assignmentRunId,
+      repository_path: '',
       is_default: true,
       repository_name: 'Default Repository',
     })
@@ -760,9 +761,7 @@ async function loadCourseSubmissionDataset(courseId) {
 
   const { data: submissionRows, error: submissionsError } = await supabase
     .from('submissions')
-    .select(
-      'submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path, test_flag'
-    )
+    .select('submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path')
     .in('repository_id', repositoryIds)
     .order('created_at', { ascending: false })
 
@@ -781,9 +780,7 @@ async function loadSubmissionsByIds(submissionIds) {
 
   const { data, error } = await supabase
     .from('submissions')
-    .select(
-      'submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path, test_flag'
-    )
+    .select('submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path')
     .in('submission_id', submissionIds)
 
   if (error) throw error
@@ -1313,7 +1310,8 @@ export async function fetchReviewQueue(courseId) {
           status: getReviewStatus(similarityScore),
           analysisState: bestResult ? 'complete' : 'queued',
           repositoryKey: 'current',
-          repositoryLabel: buildRepositoryName(repository) || buildRepositoryLabel(submission) || getRepositoryLabel('current'),
+          repositoryLabel:
+            buildRepositoryName(repository) || buildRepositoryLabel(submission) || DEFAULT_REPOSITORY_LABEL,
           excerpt: bestResult
             ? `Highest recorded similarity is ${similarityScore}% against submission #${getCounterpartSubmissionId(bestResult, submission.submission_id)}.`
             : 'No stored comparison results are available for this submission yet.',
@@ -1570,9 +1568,7 @@ async function fetchExportData(assignmentRunId) {
 
   const { data: submissionRows, error: submissionsError } = await supabase
     .from('submissions')
-    .select(
-      'submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path, test_flag'
-    )
+    .select('submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path')
     .in('repository_id', repositoryIds)
     .order('created_at', { ascending: true })
 

@@ -599,7 +599,7 @@ export default function InstructorDashboard() {
     }
 
     if (!assignment?.repository_id || !assignment?.has_repository) {
-      window.alert('Upload a repository for this assignment run before generating results.')
+      window.alert('Upload a course repository for this assignment run before generating results.')
       return
     }
 
@@ -699,7 +699,7 @@ export default function InstructorDashboard() {
         <div>
           <h1 className="instructor-title">Instructor Workspace</h1>
           <p className="instructor-subtitle">
-            Manage course offerings, attach one repository source to each assignment run, and
+            Manage course offerings, attach one course repository to each assignment run, and
             review stored comparison results from the EL Kapitan instructor flow.
           </p>
           {user?.firstName && (
@@ -837,7 +837,7 @@ export default function InstructorDashboard() {
             {uploadingAssignment && (
               <>
                 <span className="breadcrumb-separator">-&gt;</span>
-                <span className="breadcrumb-current">Upload Repository</span>
+                <span className="breadcrumb-current">Upload Course Repository</span>
               </>
             )}
           </div>
@@ -983,10 +983,10 @@ export default function InstructorDashboard() {
                           <p className="assignment-due">Due: {formatDueDate(item.due_date)}</p>
                           <p className="assignment-preview">
                             {item.has_repository
-                              ? `Stored repository: ${item.repository_name}`
+                              ? `Stored course repository: ${item.repository_name}`
                               : item.repository_id
-                                ? 'Default repository placeholder is ready. Upload the source archive to populate it.'
-                                : 'No repository source uploaded yet.'}
+                                ? 'Course repository placeholder is ready. Upload the source archive to populate it.'
+                                : 'No course repository uploaded yet.'}
                           </p>
                           {item.repository_created_at && (
                             <p className="teacherSectionMeta">
@@ -1005,7 +1005,9 @@ export default function InstructorDashboard() {
                               item.has_repository ? 'statusBadge status-complete' : 'statusBadge status-queued'
                             }
                           >
-                            {item.has_repository ? 'Repository Ready' : 'Repository Pending'}
+                            {item.has_repository
+                              ? 'Course Repository Ready'
+                              : 'Course Repository Pending'}
                           </span>
 
                           <button className="btn-edit" onClick={() => openEditAssignmentForm(item)}>
@@ -1016,7 +1018,7 @@ export default function InstructorDashboard() {
                             className="btn-upload"
                             onClick={() => openRepositoryUploadForm(item)}
                           >
-                            Upload Repo
+                            Upload Course Repo
                           </button>
 
                           <button
@@ -1159,9 +1161,9 @@ export default function InstructorDashboard() {
           {selectedCourse && uploadingAssignment && (
             <div className="assignment-form-shell teacherCard">
               <div className="teacherSectionHeaderInline">
-                <h3>Upload repository</h3>
+                <h3>Upload course repository</h3>
                 <span className="teacherSectionMeta">
-                  Store the single source repository for {uploadingAssignment.name}. The backend
+                  Store the single course repository for {uploadingAssignment.name}. The backend
                   uses this repository when Generate Result is triggered.
                 </span>
               </div>
@@ -1183,7 +1185,7 @@ export default function InstructorDashboard() {
                   <p className="upload-helper-text">
                     {uploadFile
                       ? `Selected file: ${uploadFile.name}`
-                      : 'Zip the repository first, then upload the archive here.'}
+                      : 'Zip the course repository first, then upload the archive here.'}
                   </p>
                 </div>
 
@@ -1193,7 +1195,7 @@ export default function InstructorDashboard() {
                     onClick={handleRepositoryUploadSubmit}
                     disabled={uploadLoading}
                   >
-                    {uploadLoading ? 'Uploading...' : 'Upload Repository'}
+                    {uploadLoading ? 'Uploading...' : 'Upload Course Repository'}
                   </button>
                   <button
                     className="teacherButton teacherButtonSecondary"

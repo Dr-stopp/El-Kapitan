@@ -13,15 +13,19 @@ export const UPLOAD_OPTIONS = {
     helperText: 'Upload a source file or archive for this assignment.',
   },
   repository: {
-    label: 'Repository (.zip)',
+    label: 'Course Repository (.zip)',
     acceptedExtensions: ['.zip'],
     acceptAttr: '.zip',
-    submitLabel: 'Upload Repository',
-    helperText: 'Zip your repository first, then upload the archive here.',
+    submitLabel: 'Upload Course Repository',
+    helperText: 'Zip the course repository first, then upload the archive here.',
   },
 }
 
-const DEFAULT_REPOSITORY_NAMES = new Set(['Default Repository', 'Assignment Repository'])
+const DEFAULT_REPOSITORY_NAMES = new Set([
+  'Default Repository',
+  'Assignment Repository',
+  'Course Repository',
+])
 
 export function sanitizePathSegment(value) {
   return String(value || '')
