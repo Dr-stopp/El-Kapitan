@@ -144,12 +144,11 @@ export default function SubmissionComparePage() {
   const [comparison, setComparison] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [viewMode, setViewMode] = useState('focus')
+  const [viewMode, setViewMode] = useState('full')
   const [activeBlockIndex, setActiveBlockIndex] = useState(0)
 
   const leftPaneRef = useRef(null)
   const rightPaneRef = useRef(null)
-  const syncingScrollRef = useRef(false)
 
   useEffect(() => {
     let ignore = false
@@ -246,17 +245,6 @@ export default function SubmissionComparePage() {
     scrollPaneToLine(leftPaneRef, activeBlock.leftStartLine)
     scrollPaneToLine(rightPaneRef, activeBlock.rightStartLine)
   }, [activeBlock, viewMode])
-
-  const syncScroll = (sourceRef, targetRef) => {
-    if (syncingScrollRef.current || !sourceRef.current || !targetRef.current) return
-
-    syncingScrollRef.current = true
-    targetRef.current.scrollTop = sourceRef.current.scrollTop
-
-    window.requestAnimationFrame(() => {
-      syncingScrollRef.current = false
-    })
-  }
 
   return (
     <div className="dashboard instructor-shell">
@@ -417,7 +405,6 @@ export default function SubmissionComparePage() {
                   <div
                     ref={leftPaneRef}
                     className="codePane"
-                    onScroll={() => syncScroll(leftPaneRef, rightPaneRef)}
                   >
                     {leftRenderedRows.map((row) =>
                       row.type === 'gap' ? (
@@ -460,7 +447,6 @@ export default function SubmissionComparePage() {
                   <div
                     ref={rightPaneRef}
                     className="codePane"
-                    onScroll={() => syncScroll(rightPaneRef, leftPaneRef)}
                   >
                     {rightRenderedRows.map((row) =>
                       row.type === 'gap' ? (
