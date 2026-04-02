@@ -23,9 +23,15 @@ public class zipProcessor {
         try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream(), StandardCharsets.UTF_8)) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
-                if (!entry.isDirectory() && "zip".equalsIgnoreCase(getExtension(entry.getName()))) {
+                String entryName = entry.getName();
+                if (entry.isDirectory() || isInternalArchivePath(entryName)) {
+                    zis.closeEntry();
+                    continue;
+                }
+
+                if ("zip".equalsIgnoreCase(getExtension(entryName))) {
                     byte[] entryBytes = zis.readAllBytes();
-                    String originalName = Paths.get(entry.getName()).getFileName().toString();
+                    String originalName = Paths.get(entryName).getFileName().toString();
                     MultipartFile nestedZip = new MockMultipartFile(
                             originalName,
                             originalName,
@@ -118,6 +124,19 @@ public class zipProcessor {
         int dot = fileName.lastIndexOf('.');
         if (dot <= 0 || dot == fileName.length() - 1) return "";
         return fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isInternalArchivePath(String entryName) {
+        String normalized = entryName.replace('\\', '/');
+        String[] parts = normalized.split("/");
+
+        for (String part : parts) {
+            if (part.isBlank()) continue;
+            if (part.startsWith(".")) return true;
+            if ("__MACOSX".equalsIgnoreCase(part)) return true;
+        }
+
+        return false;
     }
 
 }
