@@ -257,7 +257,13 @@ export default function ReviewQueuePanel({
                         <tr
                           key={item.id}
                           className={selectedSubmission?.id === item.id ? 'reviewRowActive' : ''}
+                          style={{ cursor: 'pointer' }}
                           onClick={() => setSelectedId(item.id)}
+                          onDoubleClick={() => {
+                            if (normalizeAnalysisState(item.analysisState) === 'complete') {
+                              navigate(`/report/${item.id}`)
+                            }
+                          }}
                         >
                           <td>
                             <div className="submissionPrimary">{item.displayStudentName}</div>
