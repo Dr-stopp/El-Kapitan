@@ -17,6 +17,14 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
 
+@CrossOrigin(
+    originPatterns = {
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://el-kapitan.vercel.app",
+        "https://*.vercel.app",
+    }
+)
 @RestController
 public class SubmitController {
 
