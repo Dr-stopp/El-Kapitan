@@ -129,7 +129,7 @@ public class SubmitController {
     ) throws IOException {
         log.info("Results requested");
         results.generateResults(UUID.fromString(assignmentRunID), repositoryID);
-        return null;
+        return ResponseEntity.ok("Analysis started.");
     }
 
     @PostMapping(path = "/repository", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
