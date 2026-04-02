@@ -12,6 +12,7 @@ function ensureSupabase() {
       'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'
     )
   }
+  return supabase
 }
 
 function unique(values) {
