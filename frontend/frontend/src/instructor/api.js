@@ -42,15 +42,7 @@ function buildDataAccessError(error, fallbackMessage) {
 }
 
 function mapUserName(submissionRow, fallbackId) {
-  const explicitName = [
-    String(submissionRow?.student_first_name || '').trim(),
-    String(submissionRow?.student_last_name || '').trim(),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .trim()
-
-  return explicitName || parseStudentNameFromFolderPath(submissionRow?.folder_path) || `Student ${fallbackId}`
+  return parseStudentNameFromFolderPath(submissionRow?.folder_path) || `Student ${fallbackId}`
 }
 
 function getReviewStatus(score) {
@@ -259,7 +251,7 @@ function parseStudentNameFromFolderPath(folderPath) {
 }
 
 function buildRepositoryLabel(submissionRow) {
-  return submissionRow?.test_flag === 'repository' ? 'Course Repository Upload' : 'Code File'
+  return submissionRow?.repository_id ? DEFAULT_REPOSITORY_LABEL : 'Code File'
 }
 
 function buildSourceLabel(submissionRow, submissionId) {
@@ -762,7 +754,7 @@ async function loadCourseSubmissionDataset(courseId) {
 
   const { data: submissionRows, error: submissionsError } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path')
+    .select('submission_id, created_at, repository_id, folder_path')
     .in('repository_id', repositoryIds)
     .order('created_at', { ascending: false })
 
@@ -781,7 +773,7 @@ async function loadSubmissionsByIds(submissionIds) {
 
   const { data, error } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path')
+    .select('submission_id, created_at, repository_id, folder_path')
     .in('submission_id', submissionIds)
 
   if (error) throw error
@@ -1572,7 +1564,7 @@ async function fetchExportData(assignmentRunId) {
 
   const { data: submissionRows, error: submissionsError } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, student_first_name, student_last_name, folder_path')
+    .select('submission_id, created_at, repository_id, folder_path')
     .in('repository_id', repositoryIds)
     .order('created_at', { ascending: true })
 
@@ -1584,6 +1576,16 @@ async function fetchExportData(assignmentRunId) {
   )
 
   return { submissions, resultsMap }
+}
+
+function buildStudentFolderName(submissionRow) {
+  const fileName = String(submissionRow?.folder_path || '').split('/').filter(Boolean).pop()
+  if (!fileName) return null
+
+  const match = fileName.match(/^([^_]+)_([^_]+)_\d+_/)
+  if (!match) return null
+
+  return `${match[1]}_${match[2]}`.toLowerCase()
 }
 
 function getFileNameFromPath(folderPath) {
