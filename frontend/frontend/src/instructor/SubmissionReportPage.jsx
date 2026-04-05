@@ -252,8 +252,22 @@ export default function SubmissionReportPage() {
                           <p className="priorityMeta">{match.reason}</p>
                         </div>
 
-                        {/* Match score */}
-                        <div className="priorityScore">{match.score}%</div>
+                        <div className="priorityActions">
+                          {/* Match score */}
+                          <div className="priorityScore">{match.score}%</div>
+
+                          {/* Compare button */}
+                          <button
+                            className="teacherButton teacherButtonSecondary teacherButtonSmall"
+                            onClick={() =>
+                              navigate(
+                                `/compare/${submissionId}?pairId=${match.pairId}`
+                              )
+                            }
+                          >
+                            Compare
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

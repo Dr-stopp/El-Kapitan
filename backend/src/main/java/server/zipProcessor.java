@@ -18,6 +18,34 @@ import java.nio.file.Path;
 
 public class zipProcessor {
 
+    public static List<MultipartFile> createZipList(MultipartFile zipFile) throws IOException {
+        List<MultipartFile> zipFiles = new ArrayList<>();
+        try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream(), StandardCharsets.UTF_8)) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String entryName = entry.getName();
+                if (entry.isDirectory() || isInternalArchivePath(entryName)) {
+                    zis.closeEntry();
+                    continue;
+                }
+
+                if ("zip".equalsIgnoreCase(getExtension(entryName))) {
+                    byte[] entryBytes = zis.readAllBytes();
+                    String originalName = Paths.get(entryName).getFileName().toString();
+                    MultipartFile nestedZip = new MockMultipartFile(
+                            originalName,
+                            originalName,
+                            "application/zip",
+                            entryBytes
+                    );
+                    zipFiles.add(nestedZip);
+                }
+                zis.closeEntry();
+            }
+        }
+        return zipFiles;
+    }
+
     /**
      * Reads a ZIP from MultipartFile, concatenates files with the same extension as
      * the first file found, and writes output to ./temp/combined.<ext>
@@ -96,6 +124,19 @@ public class zipProcessor {
         int dot = fileName.lastIndexOf('.');
         if (dot <= 0 || dot == fileName.length() - 1) return "";
         return fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isInternalArchivePath(String entryName) {
+        String normalized = entryName.replace('\\', '/');
+        String[] parts = normalized.split("/");
+
+        for (String part : parts) {
+            if (part.isBlank()) continue;
+            if (part.startsWith(".")) return true;
+            if ("__MACOSX".equalsIgnoreCase(part)) return true;
+        }
+
+        return false;
     }
 
 }

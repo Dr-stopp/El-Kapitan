@@ -1,33 +1,54 @@
 <!DOCTYPE html>
 <html>
 <body>
-<input type="text" id="student" placeholder="Student ID">
+<h1>Insert Submission</h1>
+<input type="text" id="studentFirst" placeholder="Student First Name">
 <br>
-<input type="text" id="assignment" placeholder="Assignment ID">
+<input type="text" id="studentLast" placeholder="Student Last Name">
 <br>
-<input type="text" id="course" placeholder="Course">
+<input type="text" id="studentEmail" placeholder="Student Email">
+<br>
+<input type="text" id="assignment" placeholder="Assignment Run ID">
 <br>
 <input type="file" id="submission">
 <br>
 <button onclick="send()">Submit</button>
+<br><br>
+<h1>Generate Results</h1>
+<input type = "text" id = "assignmentRun" placeholder="Assignment Run ID">
+<br>
+<input type = "text" id = "repository" placeholder="RepositoryID">
+<br>
+<button onclick = "result()"> Results </button>
+<br>
+<h1>Insert Repository</h1>
+<input type = "text" id = "repoAssignmentRun" placeholder="Assignment Run ID">
+<br>
+<input type = "text" id = "repositoryName" placeholder="RepositoryName">
+<br>
+<input type="file" id="repoFile">
+<br>
+<button onclick = "repository()"> Insert </button>
 
 <script>
     async function send() {
       const file = document.getElementById("submission").files[0];
-      const student = document.getElementById("student").value.trim();
+      const studentFirst = document.getElementById("studentFirst").value.trim();
+      const studentLast = document.getElementById("studentLast").value.trim();
+      const studentEmail = document.getElementById("studentEmail").value.trim();
       const assignment = document.getElementById("assignment").value.trim();
-      const course = document.getElementById("course").value.trim();
 
       if (!file) return console.log("No file selected");
-      if (!student || !assignment || !course) {
+      if (!studentFirst || !studentLast || !studentEmail || !assignment) {
         return console.log("Fill student, assignment, and course");
       }
 
       const formData = new FormData();
       formData.append("file", file, file.name);
-      formData.append("student", student);
+      formData.append("studentFirst", studentFirst);
+      formData.append("studentLast", studentLast);
+      formData.append("studentEmail", studentEmail);
       formData.append("assignment", assignment);
-      formData.append("course", course);
 
       const res = await fetch("http://localhost:8080/submit", {
         method: "POST",
@@ -37,5 +58,49 @@
       console.log(res.status, await res.text());
     }
   </script>
+
+<script>
+  async function result() {
+    const assignmentRun = document.getElementById("assignmentRun").value.trim();
+    const repository = document.getElementById("repository").value.trim();
+    if (!assignmentRun || !repository) {
+        return console.log("Fill assignment run and repository");
+      }
+    const formData = new FormData();
+      formData.append("repository", repository);
+      formData.append("assignment", assignmentRun);
+
+     const res = await fetch("http://localhost:8080/result", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log(res.status, await res.text());
+  }
+</script>
+
+<script>
+  async function repository() {
+    const assignmentRun = document.getElementById("repoAssignmentRun").value.trim();
+    const repositoryName = document.getElementById("repositoryName").value.trim();
+    const file = document.getElementById("repoFile").files[0];
+    if (!assignmentRun || !repository) {
+        return console.log("Fill assignment run and repository");
+      }
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("repositoryName", repositoryName);
+    formData.append("assignmentRun", assignmentRun);
+
+     const res = await fetch("http://localhost:8080/repository", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log(res.status, await res.text());
+  }
+</script>
+
+
 </body>
 </html>

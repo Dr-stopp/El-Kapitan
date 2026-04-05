@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { buildFallbackProfile } from '../lib/userProfile'
 import { AuthContext } from './auth-context'
 
@@ -12,6 +12,11 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
     let ignore = false
 
     const applySessionUser = async (sessionUser) => {
@@ -56,6 +61,13 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signUp = async (email, password, firstName, lastName) => {
+    if (!supabase) {
+      return {
+        data: null,
+        error: { message: 'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/frontend/.env' },
+        user: null,
+      }
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -77,6 +89,13 @@ export function AuthProvider({ children }) {
   }
 
   const signIn = async (email, password) => {
+    if (!supabase) {
+      return {
+        data: null,
+        error: { message: 'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/frontend/.env' },
+        user: null,
+      }
+    }
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -93,6 +112,9 @@ export function AuthProvider({ children }) {
   }
 
   const signOut = async () => {
+    if (!supabase) {
+      return { error: null }
+    }
     const { error } = await supabase.auth.signOut()
     if (!error) {
       setUser(null)
@@ -101,7 +123,9 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, signUp, signIn, signOut, isSupabaseConfigured }}
+    >
       {children}
     </AuthContext.Provider>
   )

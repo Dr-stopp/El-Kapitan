@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import {
   UPLOAD_OPTIONS,
@@ -58,8 +59,12 @@ function getLanguageBreakdown(assignments) {
   return topLanguage ? `${topLanguage[0]} (${topLanguage[1]})` : 'No assignments'
 }
 
+const VALID_TABS = new Set(['assignments', 'review', 'analytics'])
+
 export default function InstructorDashboard() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pendingCourseIdRef = useRef(searchParams.get('courseId'))
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [deletingCourse, setDeletingCourse] = useState(false)
@@ -82,7 +87,10 @@ export default function InstructorDashboard() {
   const [uploadLoading, setUploadLoading] = useState(false)
   const [exportingAssignmentId, setExportingAssignmentId] = useState(null)
   const [generatingAssignmentId, setGeneratingAssignmentId] = useState('')
-  const [activeTab, setActiveTab] = useState('assignments')
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = searchParams.get('tab')
+    return VALID_TABS.has(tabParam) ? tabParam : 'assignments'
+  })
   const [submissions, setSubmissions] = useState([])
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
   const [submissionsError, setSubmissionsError] = useState('')
@@ -123,6 +131,25 @@ export default function InstructorDashboard() {
       ignore = true
     }
   }, [user])
+
+  useEffect(() => {
+    if (!pendingCourseIdRef.current || courses.length === 0) return
+    const targetId = pendingCourseIdRef.current
+    pendingCourseIdRef.current = null
+    const match = courses.find((c) => String(c.course_id) === targetId)
+    if (match) handleCourseSelection(match)
+  }, [courses])
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (selectedCourse?.course_id) {
+      params.set('courseId', String(selectedCourse.course_id))
+    }
+    if (activeTab && activeTab !== 'assignments') {
+      params.set('tab', activeTab)
+    }
+    setSearchParams(params, { replace: true })
+  }, [selectedCourse, activeTab, setSearchParams])
 
   useEffect(() => {
     if (!selectedCourse) return
