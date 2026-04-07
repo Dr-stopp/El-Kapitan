@@ -82,6 +82,7 @@ export default function InstructorDashboard() {
   const [formDueTime, setFormDueTime] = useState('')
   const [uploadingAssignment, setUploadingAssignment] = useState(null)
   const [uploadFile, setUploadFile] = useState(null)
+  const [uploadName, setUploadName] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [uploadLoading, setUploadLoading] = useState(false)
@@ -306,6 +307,7 @@ export default function InstructorDashboard() {
 
   const resetRepositoryUploadForm = () => {
     setUploadFile(null)
+    setUploadName('')
     setUploadError('')
     setUploadSuccess('')
   }
@@ -503,6 +505,13 @@ export default function InstructorDashboard() {
       return
     }
 
+    const trimmedName = uploadName.trim()
+    if (!trimmedName) {
+      setUploadSuccess('')
+      setUploadError('Please enter a repository name.')
+      return
+    }
+
     setUploadLoading(true)
     setUploadError('')
     setUploadSuccess('')
@@ -511,6 +520,7 @@ export default function InstructorDashboard() {
       const response = await uploadInstructorSourceAsset({
         assignmentRunId: uploadingAssignment.assignment_run_id,
         file: uploadFile,
+        repositoryName: trimmedName,
         sourceKind: 'repository',
       })
 
@@ -542,7 +552,7 @@ export default function InstructorDashboard() {
                   repository_id: repositoryId ?? item.repository_id,
                   repository_name:
                     syncedRepository?.repository_name ||
-                    uploadFile?.name ||
+                    trimmedName ||
                     item.repository_name ||
                     'Uploaded Repository',
                   repository_path:
@@ -564,7 +574,7 @@ export default function InstructorDashboard() {
               repository_id: repositoryId ?? previous.repository_id,
               repository_name:
                 syncedRepository?.repository_name ||
-                uploadFile?.name ||
+                trimmedName ||
                 previous.repository_name ||
                 'Uploaded Repository',
               repository_path:
@@ -583,6 +593,7 @@ export default function InstructorDashboard() {
       setUploadError('')
       setUploadSuccess(backendMessage)
       setUploadFile(null)
+      setUploadName('')
 
       if (selectedCourse?.course_id) {
         refreshSubmissionData(selectedCourse.course_id)
@@ -1202,6 +1213,18 @@ export default function InstructorDashboard() {
                 )}
 
                 <div className="form-group">
+                  <label className="form-label">Repository name</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder="e.g. Week 5 starter code"
+                    value={uploadName}
+                    onChange={(event) => setUploadName(event.target.value)}
+                    disabled={uploadLoading}
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">{UPLOAD_OPTIONS.repository.label}</label>
                   <input
                     className="form-input"
@@ -1220,7 +1243,7 @@ export default function InstructorDashboard() {
                   <button
                     className="btn-form-submit"
                     onClick={handleRepositoryUploadSubmit}
-                    disabled={uploadLoading}
+                    disabled={uploadLoading || !uploadFile || !uploadName.trim()}
                   >
                     {uploadLoading ? 'Uploading...' : 'Upload Course Repository'}
                   </button>
