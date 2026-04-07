@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   formatAnalysisStateLabel,
@@ -19,7 +19,13 @@ export default function ReviewQueuePanel({
   const [languageFilter, setLanguageFilter] = useState('All')
   const [sortBy, setSortBy] = useState('similarity')
   const [selectedId, setSelectedId] = useState(null)
+  const [tableScrollWidth, setTableScrollWidth] = useState(0)
+  const [tableViewportWidth, setTableViewportWidth] = useState(0)
   const navigate = useNavigate()
+  const topScrollRef = useRef(null)
+  const tableWrapRef = useRef(null)
+  const tableRef = useRef(null)
+  const isSyncingScrollRef = useRef(false)
 
   const availableAssignmentNames = useMemo(
     () => assignments.map((item) => item.name),
@@ -90,6 +96,46 @@ export default function ReviewQueuePanel({
 
   const selectedSubmission =
     filteredSubmissions.find((item) => item.id === effectiveSelectedId) ?? null
+  const showTopScrollbar =
+    filteredSubmissions.length > 0 && tableScrollWidth > tableViewportWidth + 1
+
+  useEffect(() => {
+    const updateScrollMetrics = () => {
+      setTableScrollWidth(tableRef.current?.scrollWidth || 0)
+      setTableViewportWidth(tableWrapRef.current?.clientWidth || 0)
+    }
+
+    updateScrollMetrics()
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateScrollMetrics) : null
+
+    if (tableWrapRef.current) {
+      resizeObserver?.observe(tableWrapRef.current)
+    }
+
+    if (tableRef.current) {
+      resizeObserver?.observe(tableRef.current)
+    }
+
+    window.addEventListener('resize', updateScrollMetrics)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', updateScrollMetrics)
+    }
+  }, [filteredSubmissions.length])
+
+  const syncHorizontalScroll = (sourceRef, targetRef) => {
+    if (!sourceRef.current || !targetRef.current || isSyncingScrollRef.current) return
+
+    isSyncingScrollRef.current = true
+    targetRef.current.scrollLeft = sourceRef.current.scrollLeft
+
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false
+    })
+  }
 
   const handleExportQueue = () => {
     const exportRows = filteredSubmissions.map((item) => ({
@@ -238,79 +284,97 @@ export default function ReviewQueuePanel({
                   No submissions matched the current filters.
                 </div>
               ) : (
-                <div className="reviewTableWrap">
-                  <table className="reviewTable">
-                    <thead>
-                      <tr>
-                        <th>Student</th>
-                        <th>Assignment</th>
-                        <th>Course Repository</th>
-                        <th>Language</th>
-                        <th>Similarity</th>
-                        <th>Analysis</th>
-                        <th>Review</th>
-                        <th>Submitted</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSubmissions.map((item) => (
-                        <tr
-                          key={item.id}
-                          className={selectedSubmission?.id === item.id ? 'reviewRowActive' : ''}
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => setSelectedId(item.id)}
-                          onDoubleClick={() => {
-                            if (normalizeAnalysisState(item.analysisState) === 'complete') {
-                              navigate(`/report/${item.id}`)
-                            }
-                          }}
-                        >
-                          <td>
-                            <div className="submissionPrimary">{item.displayStudentName}</div>
-                          </td>
-                          <td>
-                            <div className="submissionSecondary">{item.assignmentName}</div>
-                          </td>
-                          <td>{item.repositoryLabel}</td>
-                          <td>{item.language}</td>
-                          <td>
-                            <span className="similarityPill">
-                              {item.similarityScore ?? '--'}
-                              {item.similarityScore !== null && item.similarityScore !== undefined
-                                ? '%'
-                                : ''}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`statusBadge status-${normalizeAnalysisState(item.analysisState)}`}>
-                              {formatAnalysisStateLabel(item.analysisState)}
-                            </span>
-                          </td>
-                          <td>
-                            <span
-                              className={`statusBadge status-${String(item.status || 'Pending Review')
-                                .toLowerCase()
-                                .replace(/\s+/g, '-')}`}
-                            >
-                              {item.status || 'Pending Review'}
-                            </span>
-                          </td>
-                          <td>{item.submittedAt}</td>
+                <>
+                  {showTopScrollbar && (
+                    <div className="reviewTableTopScrollShell">
+                      <div className="reviewTableTopScrollLabel">Scroll for more columns</div>
+                      <div
+                        ref={topScrollRef}
+                        className="reviewTableTopScroll"
+                        onScroll={() => syncHorizontalScroll(topScrollRef, tableWrapRef)}
+                        aria-hidden="true"
+                      >
+                        <div
+                          className="reviewTableTopScrollRail"
+                          style={{ width: `${tableScrollWidth}px` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    ref={tableWrapRef}
+                    className="reviewTableWrap"
+                    onScroll={() => syncHorizontalScroll(tableWrapRef, topScrollRef)}
+                  >
+                    <table ref={tableRef} className="reviewTable">
+                      <thead>
+                        <tr>
+                          <th>Student</th>
+                          <th>Assignment</th>
+                          <th>Course Repository</th>
+                          <th>Language</th>
+                          <th>Similarity</th>
+                          <th>Analysis</th>
+                          <th>Review</th>
+                          <th>Submitted</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {filteredSubmissions.map((item) => (
+                          <tr
+                            key={item.id}
+                            className={selectedSubmission?.id === item.id ? 'reviewRowActive' : ''}
+                            onClick={() => setSelectedId(item.id)}
+                          >
+                            <td>
+                              <div className="submissionPrimary">{item.displayStudentName}</div>
+                            </td>
+                            <td>
+                              <div className="submissionSecondary">{item.assignmentName}</div>
+                            </td>
+                            <td>{item.repositoryLabel}</td>
+                            <td>{item.language}</td>
+                            <td>
+                              <span className="similarityPill">
+                                {item.similarityScore ?? '--'}
+                                {item.similarityScore !== null && item.similarityScore !== undefined
+                                  ? '%'
+                                  : ''}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`statusBadge status-${normalizeAnalysisState(item.analysisState)}`}>
+                                {formatAnalysisStateLabel(item.analysisState)}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className={`statusBadge status-${String(item.status || 'Pending Review')
+                                  .toLowerCase()
+                                  .replace(/\s+/g, '-')}`}
+                              >
+                                {item.status || 'Pending Review'}
+                              </span>
+                            </td>
+                            <td>{item.submittedAt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
 
           <div className="teacherSideColumn">
             <div className="teacherCard">
-              <div className="teacherSectionHeaderInline">
-                <h3>Selected Submission</h3>
-                <span className="teacherSectionMeta">
-                  {selectedSubmission ? `#${selectedSubmission.id}` : 'None'}
+                <div className="teacherSectionHeaderInline">
+                  <h3>Selected Submission</h3>
+                  <span className="teacherSectionMeta">
+                  {selectedSubmission
+                    ? selectedSubmission.publicId || `#${selectedSubmission.id}`
+                    : 'None'}
                 </span>
               </div>
 
@@ -318,6 +382,10 @@ export default function ReviewQueuePanel({
                 <div className="teacherEmptyInline">Select a submission to inspect details.</div>
               ) : (
                 <div className="detailsStack">
+                  <div className="detailRow">
+                    <span>Submission ID</span>
+                    <strong>{selectedSubmission.publicId || `#${selectedSubmission.id}`}</strong>
+                  </div>
                   <div className="detailRow">
                     <span>Student</span>
                     <strong>{selectedSubmission.displayStudentName}</strong>

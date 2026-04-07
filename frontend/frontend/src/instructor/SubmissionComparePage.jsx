@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { fetchSubmissionComparison } from './api'
+import {
+  fetchRepositoryComparisonSource,
+  fetchSubmissionComparison,
+} from './api'
 import {
   buildComparisonViewModel,
   extractComparisonFileLabel,
   formatAnalysisStateLabel,
   normalizeAnalysisState,
+  parseStructuredSourceFiles,
 } from './utils'
 
 function mergeRanges(ranges) {
@@ -29,13 +33,46 @@ function mergeRanges(ranges) {
   return merged
 }
 
-function buildRenderedRows(lines, matchedBlocks, viewMode, side, contextLines = 2) {
+const MATCH_PALETTE = [
+  'rgba(100, 181, 246, 0.35)',
+  'rgba(129, 199, 132, 0.35)',
+  'rgba(255, 183, 77, 0.35)',
+  'rgba(186, 104, 200, 0.30)',
+  'rgba(240, 98, 146, 0.30)',
+  'rgba(77, 208, 225, 0.35)',
+  'rgba(255, 213, 79, 0.35)',
+  'rgba(161, 136, 127, 0.35)',
+  'rgba(121, 134, 203, 0.35)',
+  'rgba(174, 213, 129, 0.35)',
+  'rgba(255, 138, 128, 0.35)',
+  'rgba(128, 203, 196, 0.35)',
+]
+
+function findBlockIndex(lineNumber, matchedBlocks, side) {
+  for (let index = 0; index < matchedBlocks.length; index += 1) {
+    const block = matchedBlocks[index]
+    if (
+      lineNumber >= Number(block[`${side}StartLine`] || 1) &&
+      lineNumber <= Number(block[`${side}EndLine`] || 1)
+    ) {
+      return index
+    }
+  }
+
+  return -1
+}
+
+function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, contextLines = 2) {
   if (viewMode === 'full' || !matchedBlocks.length) {
-    return lines.map((line) => ({
-      type: 'line',
-      line,
-      blockIndex: findBlockIndex(line.number, matchedBlocks, side),
-    }))
+    return lines.map((line) => {
+      const blockIndex = findBlockIndex(line.number, matchedBlocks, side)
+      return {
+        blockIndex,
+        type: 'line',
+        line,
+        active: blockIndex >= 0 && blockIndex === activeIndex,
+      }
+    })
   }
 
   const ranges = mergeRanges(
@@ -55,10 +92,12 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, side, contextLines = 
     )
 
     if (!firstRangeContainsHeader) {
+      const blockIndex = findBlockIndex(firstLine.number, matchedBlocks, side)
       rows.push({
         type: 'line',
         line: firstLine,
-        blockIndex: -1,
+        blockIndex,
+        active: blockIndex >= 0 && blockIndex === activeIndex,
       })
       if (lines.length > 1) {
         rows.push({
@@ -76,10 +115,12 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, side, contextLines = 
     )
 
     slicedLines.forEach((line) => {
+      const blockIndex = findBlockIndex(line.number, matchedBlocks, side)
       rows.push({
         type: 'line',
         line,
-        blockIndex: findBlockIndex(line.number, matchedBlocks, side),
+        blockIndex,
+        active: blockIndex >= 0 && blockIndex === activeIndex,
       })
     })
 
@@ -96,11 +137,15 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, side, contextLines = 
   })
 
   if (!ranges.length) {
-    return lines.map((line) => ({
-      type: 'line',
-      line,
-      blockIndex: -1,
-    }))
+    return lines.map((line) => {
+      const blockIndex = findBlockIndex(line.number, matchedBlocks, side)
+      return {
+        blockIndex,
+        type: 'line',
+        line,
+        active: blockIndex >= 0 && blockIndex === activeIndex,
+      }
+    })
   }
 
   const lastRenderedLine = ranges[currentRangeIndex]?.end ?? 0
@@ -115,31 +160,6 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, side, contextLines = 
   return rows
 }
 
-const MATCH_PALETTE = [
-  'rgba(100, 181, 246, 0.35)',
-  'rgba(129, 199, 132, 0.35)',
-  'rgba(255, 183, 77, 0.35)',
-  'rgba(186, 104, 200, 0.30)',
-  'rgba(240, 98, 146, 0.30)',
-  'rgba(77, 208, 225, 0.35)',
-  'rgba(255, 213, 79, 0.35)',
-  'rgba(161, 136, 127, 0.35)',
-  'rgba(121, 134, 203, 0.35)',
-  'rgba(174, 213, 129, 0.35)',
-  'rgba(255, 138, 128, 0.35)',
-  'rgba(128, 203, 196, 0.35)',
-]
-
-function findBlockIndex(lineNumber, matchedBlocks, side) {
-  for (let i = 0; i < matchedBlocks.length; i++) {
-    const block = matchedBlocks[i]
-    if (lineNumber >= block[`${side}StartLine`] && lineNumber <= block[`${side}EndLine`]) {
-      return i
-    }
-  }
-  return -1
-}
-
 function scrollPaneToLine(paneRef, lineNumber) {
   if (!paneRef.current || !lineNumber) return
 
@@ -151,22 +171,68 @@ function scrollPaneToLine(paneRef, lineNumber) {
   })
 }
 
+function normalizeFileLabel(label) {
+  const normalized = String(label || '')
+    .trim()
+    .split(/[\\/]/)
+    .pop()
+    ?.toLowerCase() || ''
+
+  return normalized
+}
+
+function buildFileMatchScore(file, preferredLabels = []) {
+  const candidateLabel = normalizeFileLabel(file?.label)
+  if (!candidateLabel) return 0
+
+  return preferredLabels.reduce((bestScore, preferredLabel) => {
+    const normalizedPreferred = normalizeFileLabel(preferredLabel)
+    if (!normalizedPreferred) return bestScore
+    if (candidateLabel === normalizedPreferred) return Math.max(bestScore, 100)
+
+    const preferredStem = normalizedPreferred.replace(/\.[^.]+$/, '')
+    const candidateStem = candidateLabel.replace(/\.[^.]+$/, '')
+
+    if (candidateStem === preferredStem) return Math.max(bestScore, 80)
+    if (candidateStem.includes(preferredStem) || preferredStem.includes(candidateStem)) {
+      return Math.max(bestScore, 60)
+    }
+
+    return bestScore
+  }, 0)
+}
+
+function uniqueLabels(labels = []) {
+  return Array.from(
+    new Set(
+      labels
+        .map((label) => String(label || '').trim())
+        .filter(Boolean)
+    )
+  )
+}
+
 export default function SubmissionComparePage() {
   const { submissionId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-
   const pairId = searchParams.get('pairId')
 
   const [comparison, setComparison] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [viewMode, setViewMode] = useState('full')
+  const [viewMode, setViewMode] = useState('focus')
   const [activeBlockIndex, setActiveBlockIndex] = useState(0)
   const [hoveredBlockIndex, setHoveredBlockIndex] = useState(-1)
+  const [selectedLeftFileId, setSelectedLeftFileId] = useState('')
+  const [selectedRightRepositoryId, setSelectedRightRepositoryId] = useState('')
+  const [selectedRightFileId, setSelectedRightFileId] = useState('')
+  const [repositorySourcesById, setRepositorySourcesById] = useState({})
+  const [repositorySourceErrorsById, setRepositorySourceErrorsById] = useState({})
 
   const leftPaneRef = useRef(null)
   const rightPaneRef = useRef(null)
+  const syncingScrollRef = useRef(false)
 
   useEffect(() => {
     let ignore = false
@@ -175,6 +241,11 @@ export default function SubmissionComparePage() {
       .then((data) => {
         if (!ignore) {
           setComparison(data)
+          setSelectedLeftFileId('')
+          setSelectedRightRepositoryId('')
+          setSelectedRightFileId('')
+          setActiveBlockIndex(0)
+          setHoveredBlockIndex(-1)
         }
       })
       .catch((nextError) => {
@@ -192,16 +263,114 @@ export default function SubmissionComparePage() {
     return () => {
       ignore = true
     }
-  }, [submissionId, pairId])
+  }, [pairId, submissionId])
+
+  const leftFiles = useMemo(
+    () =>
+      parseStructuredSourceFiles(
+        comparison?.leftText || '',
+        `Submission #${comparison?.id || submissionId}`
+      ),
+    [comparison?.id, comparison?.leftText, submissionId]
+  )
+  const repositoryOptions = comparison?.repositoryOptions || []
+  const effectiveLeftFileId = leftFiles.some((file) => file.id === selectedLeftFileId)
+    ? selectedLeftFileId
+    : leftFiles[0]?.id || ''
+  const effectiveRightRepositoryId = repositoryOptions.some(
+    (option) => option.repositoryId === selectedRightRepositoryId
+  )
+    ? selectedRightRepositoryId
+    : String(comparison?.defaultRepositoryId || repositoryOptions[0]?.repositoryId || '')
+
+  useEffect(() => {
+    let ignore = false
+
+    if (
+      !effectiveRightRepositoryId ||
+      repositorySourcesById[effectiveRightRepositoryId] ||
+      repositorySourceErrorsById[effectiveRightRepositoryId]
+    ) {
+      return undefined
+    }
+
+    fetchRepositoryComparisonSource(effectiveRightRepositoryId)
+      .then((data) => {
+        if (ignore) return
+        setRepositorySourcesById((previous) => ({
+          ...previous,
+          [data.repositoryId]: data,
+        }))
+      })
+      .catch((nextError) => {
+        if (ignore) return
+        console.error(nextError)
+        setRepositorySourceErrorsById((previous) => ({
+          ...previous,
+          [effectiveRightRepositoryId]:
+            nextError.message || 'Failed to load repository files for comparison.',
+        }))
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [
+    effectiveRightRepositoryId,
+    repositorySourceErrorsById,
+    repositorySourcesById,
+  ])
+
+  const selectedLeftFile =
+    leftFiles.find((file) => file.id === effectiveLeftFileId) || leftFiles[0] || null
+  const repositorySource = repositorySourcesById[effectiveRightRepositoryId] || null
+  const repositorySourceError = repositorySourceErrorsById[effectiveRightRepositoryId] || ''
+  const rightFiles = useMemo(() => repositorySource?.files || [], [repositorySource])
+  const preferredRightFileId = useMemo(() => {
+    if (!rightFiles.length) return ''
+
+    const originalRightLabel = extractComparisonFileLabel(
+      comparison?.rightText,
+      comparison?.sourceLabel || 'Matched source'
+    )
+    const preferredLabels = uniqueLabels([
+      selectedLeftFile?.label,
+      originalRightLabel,
+      comparison?.sourceLabel,
+    ])
+
+    const scoredFiles = [...rightFiles]
+      .map((file) => ({
+        file,
+        score: buildFileMatchScore(file, preferredLabels),
+      }))
+      .sort((left, right) => right.score - left.score)
+
+    return scoredFiles[0]?.file?.id || rightFiles[0]?.id || ''
+  }, [comparison?.rightText, comparison?.sourceLabel, rightFiles, selectedLeftFile?.label])
+  const effectiveRightFileId = rightFiles.some((file) => file.id === selectedRightFileId)
+    ? selectedRightFileId
+    : preferredRightFileId
+  const selectedRightFile =
+    rightFiles.find((file) => file.id === effectiveRightFileId) || rightFiles[0] || null
+  const selectedRepositoryOption =
+    comparison?.repositoryOptions?.find(
+      (option) => option.repositoryId === effectiveRightRepositoryId
+    ) || null
+  const isRepositorySourceLoading = Boolean(
+    effectiveRightRepositoryId && !repositorySource && !repositorySourceError
+  )
+  const leftComparisonText = selectedLeftFile?.text || ''
+  const rightComparisonText = selectedRightFile?.text || ''
 
   const comparisonView = useMemo(
     () =>
       buildComparisonViewModel(
-        comparison?.leftText || '',
-        comparison?.rightText || '',
-        comparison?.sections || []
+        leftComparisonText,
+        rightComparisonText,
+        []
       ),
-    [comparison]
+    [leftComparisonText, rightComparisonText]
   )
 
   const analysisState = normalizeAnalysisState(comparison?.analysisState)
@@ -214,14 +383,16 @@ export default function SubmissionComparePage() {
     : 0
   const activeBlock = comparisonView.matchedBlocks[effectiveActiveBlockIndex] || null
 
-  const leftFileLabel = extractComparisonFileLabel(
-    comparison?.leftText,
-    `Submission #${comparison?.id || submissionId}`
-  )
-  const rightFileLabel = extractComparisonFileLabel(
-    comparison?.rightText,
-    comparison?.sourceLabel || 'Matched source'
-  )
+  const leftFileLabel =
+    selectedLeftFile?.label ||
+    extractComparisonFileLabel(comparison?.leftText, `Submission #${comparison?.id || submissionId}`)
+  const rightFileLabel =
+    selectedRightFile?.label ||
+    extractComparisonFileLabel(rightComparisonText, selectedRepositoryOption?.repositoryName || 'Repository file')
+  const selectedRepositoryName =
+    selectedRepositoryOption?.repositoryName ||
+    repositorySource?.repositoryName ||
+    'Select a repository'
 
   const leftRenderedRows = useMemo(
     () =>
@@ -229,9 +400,15 @@ export default function SubmissionComparePage() {
         comparisonView.leftLines,
         comparisonView.matchedBlocks,
         viewMode,
+        effectiveActiveBlockIndex,
         'left'
       ),
-    [comparisonView.leftLines, comparisonView.matchedBlocks, viewMode]
+    [
+      comparisonView.leftLines,
+      comparisonView.matchedBlocks,
+      effectiveActiveBlockIndex,
+      viewMode,
+    ]
   )
 
   const rightRenderedRows = useMemo(
@@ -240,9 +417,15 @@ export default function SubmissionComparePage() {
         comparisonView.rightLines,
         comparisonView.matchedBlocks,
         viewMode,
+        effectiveActiveBlockIndex,
         'right'
       ),
-    [comparisonView.rightLines, comparisonView.matchedBlocks, viewMode]
+    [
+      comparisonView.matchedBlocks,
+      comparisonView.rightLines,
+      effectiveActiveBlockIndex,
+      viewMode,
+    ]
   )
 
   useEffect(() => {
@@ -251,6 +434,17 @@ export default function SubmissionComparePage() {
     scrollPaneToLine(leftPaneRef, activeBlock.leftStartLine)
     scrollPaneToLine(rightPaneRef, activeBlock.rightStartLine)
   }, [activeBlock, viewMode])
+
+  const syncScroll = (sourceRef, targetRef) => {
+    if (syncingScrollRef.current || !sourceRef.current || !targetRef.current) return
+
+    syncingScrollRef.current = true
+    targetRef.current.scrollTop = sourceRef.current.scrollTop
+
+    window.requestAnimationFrame(() => {
+      syncingScrollRef.current = false
+    })
+  }
 
   return (
     <div className="dashboard instructor-shell">
@@ -281,22 +475,24 @@ export default function SubmissionComparePage() {
                 ? 'Stored match data exists, but the original source text and line-match sections were not available. The side-by-side panes below use placeholder code, so treat this view as a high-level reference only.'
                 : isUsingPlaceholderText
                   ? 'The original source text could not be read from storage. The side-by-side panes below use placeholder code instead of the real files.'
-                  : 'The comparison loaded, but no stored line-match sections were available. The panes may show real text without highlighted overlap ranges.'}
+                  : 'Stored line-match sections were not available for this result. The selected files below are compared using inferred shared-line highlights instead.'}
             </div>
           )}
 
           <div className="teacherStatGrid">
             <div className="teacherStatCard">
               <p className="teacherStatLabel">Submission ID</p>
-              <h3 className="teacherStatValue">{comparison.id}</h3>
+              <h3 className="teacherStatValue compareLongValue">
+                {comparison.publicId || `#${comparison.id}`}
+              </h3>
               <p className="teacherStatNote">{leftFileLabel}</p>
             </div>
             <div className="teacherStatCard">
-              <p className="teacherStatLabel">Matched Source</p>
-              <h3 className="teacherStatValue compareSourceValue">
-                {comparison.sourceLabel || 'Unknown source'}
+              <p className="teacherStatLabel">Reference Repository</p>
+              <h3 className="teacherStatValue compareSourceValue compareLongValue">
+                {selectedRepositoryName}
               </h3>
-              <p className="teacherStatNote">{rightFileLabel}</p>
+              <p className="teacherStatNote">{rightFileLabel || 'Choose a repository file below.'}</p>
             </div>
             <div className="teacherStatCard">
               <p className="teacherStatLabel">Similarity</p>
@@ -395,14 +591,35 @@ export default function SubmissionComparePage() {
             <div className="teacherMainColumn">
               <div className="teacherCard comparePaneCard">
                 <div className="comparePaneHeader">
-                  <div>
+                  <div className="comparePaneHeaderMain">
                     <h3>Submission Text</h3>
                     <p className="teacherSectionMeta">{leftFileLabel}</p>
                   </div>
-                  <span className="comparePaneBadge">
-                    {comparisonView.leftLines.length} line
-                    {comparisonView.leftLines.length === 1 ? '' : 's'}
-                  </span>
+                  <div className="comparePaneHeaderTools">
+                    <label className="compareInlineField" htmlFor="compare-left-file">
+                      <span>File</span>
+                      <select
+                        id="compare-left-file"
+                        className="teacherSelect compareSelect compareSelectCompact"
+                        value={effectiveLeftFileId}
+                        onChange={(event) => {
+                          setSelectedLeftFileId(event.target.value)
+                          setActiveBlockIndex(0)
+                        }}
+                        disabled={!leftFiles.length}
+                      >
+                        {leftFiles.map((file) => (
+                          <option key={file.id} value={file.id}>
+                            {file.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <span className="comparePaneBadge">
+                      {comparisonView.leftLines.length} line
+                      {comparisonView.leftLines.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
                 </div>
 
                 {analysisState !== 'complete' ? (
@@ -411,32 +628,41 @@ export default function SubmissionComparePage() {
                   <div
                     ref={leftPaneRef}
                     className="codePane"
+                    onScroll={() => syncScroll(leftPaneRef, rightPaneRef)}
                   >
-                    {leftRenderedRows.map((row) => {
-                      if (row.type === 'gap') {
-                        return (
-                          <div key={row.id} className="codeGap">
-                            <span>...</span>
-                            <span>{row.hiddenCount} line(s) hidden</span>
-                          </div>
-                        )
-                      }
-                      const bi = row.blockIndex
-                      const emphasized = bi >= 0 && (bi === hoveredBlockIndex || bi === effectiveActiveBlockIndex)
-                      return (
+                    {leftRenderedRows.map((row) =>
+                      row.type === 'gap' ? (
+                        <div key={row.id} className="codeGap">
+                          <span>...</span>
+                          <span>{row.hiddenCount} line(s) hidden</span>
+                        </div>
+                      ) : (
                         <div
                           key={`left-${row.line.number}`}
-                          className={`codeLine${bi >= 0 ? ' matchColored' : ''}${emphasized ? ' matchEmphasis' : ''}${bi >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
-                          style={bi >= 0 ? { backgroundColor: MATCH_PALETTE[bi % MATCH_PALETTE.length] } : undefined}
+                          className={`codeLine${row.blockIndex >= 0 ? ' matchColored' : ''}${row.blockIndex >= 0 && (row.blockIndex === hoveredBlockIndex || row.blockIndex === effectiveActiveBlockIndex) ? ' matchEmphasis' : ''}${row.blockIndex >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
+                          style={
+                            row.blockIndex >= 0
+                              ? {
+                                  backgroundColor:
+                                    MATCH_PALETTE[row.blockIndex % MATCH_PALETTE.length],
+                                }
+                              : undefined
+                          }
                           data-line-number={row.line.number}
-                          onMouseEnter={bi >= 0 ? () => setHoveredBlockIndex(bi) : undefined}
-                          onMouseLeave={bi >= 0 ? () => setHoveredBlockIndex(-1) : undefined}
+                          onMouseEnter={
+                            row.blockIndex >= 0
+                              ? () => setHoveredBlockIndex(row.blockIndex)
+                              : undefined
+                          }
+                          onMouseLeave={
+                            row.blockIndex >= 0 ? () => setHoveredBlockIndex(-1) : undefined
+                          }
                         >
                           <span className="codeLineNumber">{row.line.number}</span>
                           <span className="codeLineText">{row.line.text || ' '}</span>
                         </div>
                       )
-                    })}
+                    )}
                   </div>
                 )}
               </div>
@@ -445,48 +671,117 @@ export default function SubmissionComparePage() {
             <div className="teacherSideColumn compareSideColumn">
               <div className="teacherCard comparePaneCard">
                 <div className="comparePaneHeader">
-                  <div>
-                    <h3>Matched Source</h3>
-                    <p className="teacherSectionMeta">{rightFileLabel}</p>
+                  <div className="comparePaneHeaderMain">
+                    <h3>Repository File</h3>
+                    <p className="teacherSectionMeta">
+                      {selectedRepositoryName}
+                      {rightFileLabel ? ` - ${rightFileLabel}` : ''}
+                    </p>
                   </div>
-                  <span className="comparePaneBadge">
-                    {comparisonView.rightLines.length} line
-                    {comparisonView.rightLines.length === 1 ? '' : 's'}
-                  </span>
+                  <div className="comparePaneHeaderTools comparePaneHeaderToolsRight">
+                    <label className="compareInlineField" htmlFor="compare-right-repository">
+                      <span>Repository</span>
+                      <select
+                        id="compare-right-repository"
+                        className="teacherSelect compareSelect compareSelectCompact"
+                        value={effectiveRightRepositoryId}
+                        onChange={(event) => {
+                          setSelectedRightRepositoryId(event.target.value)
+                          setSelectedRightFileId('')
+                          setActiveBlockIndex(0)
+                        }}
+                        disabled={!comparison?.repositoryOptions?.length}
+                      >
+                        {(comparison?.repositoryOptions || []).map((option) => (
+                          <option key={option.repositoryId} value={option.repositoryId}>
+                            {option.repositoryName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="compareInlineField" htmlFor="compare-right-file">
+                      <span>File</span>
+                      <select
+                        id="compare-right-file"
+                        className="teacherSelect compareSelect compareSelectCompact"
+                        value={effectiveRightFileId}
+                        onChange={(event) => {
+                          setSelectedRightFileId(event.target.value)
+                          setActiveBlockIndex(0)
+                        }}
+                        disabled={isRepositorySourceLoading || !rightFiles.length}
+                      >
+                        {rightFiles.length ? (
+                          rightFiles.map((file) => (
+                            <option key={file.id} value={file.id}>
+                              {file.label}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">
+                            {isRepositorySourceLoading
+                              ? 'Loading files...'
+                              : 'No readable files found'}
+                          </option>
+                        )}
+                      </select>
+                    </label>
+                    <span className="comparePaneBadge">
+                      {comparisonView.rightLines.length} line
+                      {comparisonView.rightLines.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
                 </div>
+
+                {repositorySourceError && (
+                  <div className="upload-feedback upload-feedback-error">{repositorySourceError}</div>
+                )}
 
                 {analysisState !== 'complete' ? (
                   <div>Source not available yet.</div>
+                ) : isRepositorySourceLoading ? (
+                  <div>Loading repository files...</div>
+                ) : !selectedRightFile ? (
+                  <div>Select a repository file to compare against.</div>
                 ) : (
                   <div
                     ref={rightPaneRef}
                     className="codePane"
+                    onScroll={() => syncScroll(rightPaneRef, leftPaneRef)}
                   >
-                    {rightRenderedRows.map((row) => {
-                      if (row.type === 'gap') {
-                        return (
-                          <div key={row.id} className="codeGap">
-                            <span>...</span>
-                            <span>{row.hiddenCount} line(s) hidden</span>
-                          </div>
-                        )
-                      }
-                      const bi = row.blockIndex
-                      const emphasized = bi >= 0 && (bi === hoveredBlockIndex || bi === effectiveActiveBlockIndex)
-                      return (
+                    {rightRenderedRows.map((row) =>
+                      row.type === 'gap' ? (
+                        <div key={row.id} className="codeGap">
+                          <span>...</span>
+                          <span>{row.hiddenCount} line(s) hidden</span>
+                        </div>
+                      ) : (
                         <div
                           key={`right-${row.line.number}`}
-                          className={`codeLine${bi >= 0 ? ' matchColored' : ''}${emphasized ? ' matchEmphasis' : ''}${bi >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
-                          style={bi >= 0 ? { backgroundColor: MATCH_PALETTE[bi % MATCH_PALETTE.length] } : undefined}
+                          className={`codeLine${row.blockIndex >= 0 ? ' matchColored' : ''}${row.blockIndex >= 0 && (row.blockIndex === hoveredBlockIndex || row.blockIndex === effectiveActiveBlockIndex) ? ' matchEmphasis' : ''}${row.blockIndex >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
+                          style={
+                            row.blockIndex >= 0
+                              ? {
+                                  backgroundColor:
+                                    MATCH_PALETTE[row.blockIndex % MATCH_PALETTE.length],
+                                }
+                              : undefined
+                          }
                           data-line-number={row.line.number}
-                          onMouseEnter={bi >= 0 ? () => setHoveredBlockIndex(bi) : undefined}
-                          onMouseLeave={bi >= 0 ? () => setHoveredBlockIndex(-1) : undefined}
+                          onMouseEnter={
+                            row.blockIndex >= 0
+                              ? () => setHoveredBlockIndex(row.blockIndex)
+                              : undefined
+                          }
+                          onMouseLeave={
+                            row.blockIndex >= 0 ? () => setHoveredBlockIndex(-1) : undefined
+                          }
                         >
                           <span className="codeLineNumber">{row.line.number}</span>
                           <span className="codeLineText">{row.line.text || ' '}</span>
                         </div>
                       )
-                    })}
+                    )}
                   </div>
                 )}
               </div>
@@ -538,7 +833,12 @@ export default function SubmissionComparePage() {
 
                 <div className="detailRow detailRowBlock">
                   <span>Notes</span>
-                  <p>{comparison.notes || 'No notes provided.'}</p>
+                  <p>
+                    {comparison.notes || 'No notes provided.'}{' '}
+                    {analysisState === 'complete'
+                      ? 'The file pickers above let you manually compare the current submission against any readable file in the selected repository.'
+                      : ''}
+                  </p>
                 </div>
               </div>
             </div>

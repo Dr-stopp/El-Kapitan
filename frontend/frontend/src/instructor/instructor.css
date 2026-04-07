@@ -97,6 +97,7 @@
   padding: 22px;
   box-shadow: 0 14px 32px rgba(43, 104, 161, 0.08);
   backdrop-filter: blur(8px);
+  min-width: 0;
 }
 
 .workspaceControlCard,
@@ -242,6 +243,12 @@
   font-size: clamp(1.4rem, 2.8vw, 2.3rem);
   line-height: 1.1;
   color: var(--el-text);
+}
+
+.compareLongValue {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: clamp(1.15rem, 2.2vw, 2.1rem);
 }
 
 .offeringStatValueSmall {
@@ -598,13 +605,6 @@
   background: rgba(255, 255, 255, 0.9);
 }
 
-.priorityActions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
 .priorityScore {
   font-size: 1.1rem;
   font-weight: 800;
@@ -612,14 +612,35 @@
   white-space: nowrap;
 }
 
-.teacherButtonSmall {
-  padding: 4px 12px;
-  font-size: 0.8rem;
-}
-
 .reviewTableWrap,
 .codePane {
   overflow: auto;
+}
+
+.reviewTableTopScrollShell {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.reviewTableTopScrollLabel {
+  color: var(--el-text-muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.reviewTableTopScroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(225, 217, 188, 0.9);
+  background: rgba(245, 240, 222, 0.6);
+  height: 16px;
+}
+
+.reviewTableTopScrollRail {
+  height: 1px;
 }
 
 .reviewTable {
@@ -718,6 +739,10 @@
   flex-wrap: wrap;
 }
 
+.compareSelect {
+  min-width: 0;
+}
+
 .compareControlGroup {
   display: grid;
   gap: 10px;
@@ -775,6 +800,43 @@
   align-items: flex-start;
 }
 
+.comparePaneHeaderMain {
+  min-width: 0;
+}
+
+.comparePaneHeaderTools {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.comparePaneHeaderToolsRight {
+  max-width: 100%;
+}
+
+.compareInlineField {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.compareInlineField span {
+  color: var(--el-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.compareSelectCompact {
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+}
+
 .comparePaneBadge {
   border-radius: 999px;
   background: rgba(224, 251, 252, 0.9);
@@ -807,7 +869,7 @@
 }
 
 .codeLine.matchColored {
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .codeLine.matchEmphasis {
@@ -904,12 +966,19 @@
   }
 
   .compareControlBar,
-  .comparePaneHeader {
+  .comparePaneHeader,
+  .comparePaneHeaderTools {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .compareDetailGrid {
     grid-template-columns: 1fr;
+  }
+
+  .compareInlineField,
+  .compareSelectCompact {
+    width: 100%;
+    min-width: 0;
   }
 }
