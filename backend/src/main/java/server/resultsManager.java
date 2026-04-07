@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
@@ -31,52 +32,58 @@ public class resultsManager {
     public void generateResults(UUID assignmentRunID, long repositoryID) throws IOException {
         log.info("Generating Results:");
         String lang = dbHandler.getLang(assignmentRunID);
-        List<submission_rec> submissions = loadFiles(SUBMISSIONBUCKET, dbHandler.getDefaultRepo(assignmentRunID), lang);
-        List<submission_rec> repo = loadFiles(SUBMISSIONBUCKET, repositoryID, lang);
-        int topK = dbHandler.getTopK(assignmentRunID);
-        log.info("Submitting: " + topK + " results");
-        log.info("Running comparison for " + submissions.size() + " files. On " + repo.size() + " files.");
-        int i = 0;
+        List<submission_rec> submissions = null;
+        List<submission_rec> repo = null;
 
-        for (submission_rec s: submissions) {
-            List<ComparisonCandidate> candidates = new LinkedList<>();
+        try {
+            submissions = loadFiles(SUBMISSIONBUCKET, dbHandler.getDefaultRepo(assignmentRunID), lang);
+            repo = loadFiles(SUBMISSIONBUCKET, repositoryID, lang);
+            int topK = dbHandler.getTopK(assignmentRunID);
+            log.info("Submitting: " + topK + " results");
+            log.info("Running comparison for " + submissions.size() + " files. On " + repo.size() + " files.");
+            int i = 0;
 
-            for (submission_rec rs : repo) {
-                try {
-                    dbHandler.checkPairExists(s.submission_ID, rs.submission_ID);
-                    PlagiarismChecker pc = new PlagiarismChecker(s.file, rs.file);
-                    long score = (long) (pc.PlagarismInfo.similarity * 100);
-                    candidates.add(new ComparisonCandidate(rs.submission_ID, score, pc.PlagarismInfo));
-                    log.info(String.valueOf(pc.PlagarismInfo.similarity));
+            for (submission_rec s: submissions) {
+                List<ComparisonCandidate> candidates = new LinkedList<>();
 
-                } catch (Exception e) {
-                    log.error("Checker failed on file index={} name={}", i, s.file.getName(), e);
-                    throw e; // keep failing fast so submit returns error
+                for (submission_rec rs : repo) {
+                    try {
+                        dbHandler.checkPairExists(s.submission_ID, rs.submission_ID);
+                        PlagiarismChecker pc = new PlagiarismChecker(s.file, rs.file);
+                        long score = (long) (pc.PlagarismInfo.similarity * 100);
+                        candidates.add(new ComparisonCandidate(rs.submission_ID, score, pc.PlagarismInfo));
+                        log.info(String.valueOf(pc.PlagarismInfo.similarity));
+
+                    } catch (Exception e) {
+                        log.error("Checker failed on file index={} name={}", i, s.file.getName(), e);
+                        throw e; // keep failing fast so submit returns error
+                    }
                 }
-            }
 
-            int limit = Math.min(Math.max(topK, 0), candidates.size());
-            candidates.sort(Comparator.comparingLong(ComparisonCandidate::score).reversed());
+                int limit = Math.min(Math.max(topK, 0), candidates.size());
+                candidates.sort(Comparator.comparingLong(ComparisonCandidate::score).reversed());
 
-            for (int j = 0; j < limit; j++) {
-                ComparisonCandidate candidate = candidates.get(j);
-                String resultPath = resultsSections(
-                        candidate.plagiarismResult(),
-                        assignmentRunID,
-                        repositoryID,
-                        s.submission_ID,
-                        candidate.comparedSubmissionId()
-                );
-                dbHandler.insertResult(
-                        s.submission_ID,
-                        candidate.comparedSubmissionId(),
-                        candidate.score(),
-                        OffsetDateTime.now(),
-                        dbHandler.generateResultID(),
-                        resultPath
-                );
+                for (int j = 0; j < limit; j++) {
+                    ComparisonCandidate candidate = candidates.get(j);
+                    String resultPath = resultsSections(
+                            candidate.plagiarismResult(),
+                            assignmentRunID,
+                            repositoryID,
+                            s.submission_ID,
+                            candidate.comparedSubmissionId()
+                    );
+                    dbHandler.insertResult(
+                            s.submission_ID,
+                            candidate.comparedSubmissionId(),
+                            candidate.score(),
+                            OffsetDateTime.now(),
+                            dbHandler.generateResultID(),
+                            resultPath
+                    );
+                }
+
+                i++;
             }
-        }
 
             log.info("All comparisons complete");
             log.info("Results generated");
