@@ -99,7 +99,24 @@ function pickPrimaryRepository(rows = []) {
   })[0]
 }
 
-function mapAssignmentRun(row, assignmentRow, repositoryRow = null) {
+function sortRepositoriesForPicker(rows = []) {
+  return [...rows].sort((left, right) => {
+    if (Boolean(left.is_default) !== Boolean(right.is_default)) {
+      return left.is_default ? 1 : -1
+    }
+    return new Date(left.created_at || 0).getTime() - new Date(right.created_at || 0).getTime()
+  })
+}
+
+function mapAssignmentRun(row, assignmentRow, repositoryRow = null, repositoryRows = null) {
+  const allRows = Array.isArray(repositoryRows) && repositoryRows.length
+    ? repositoryRows
+    : repositoryRow
+      ? [repositoryRow]
+      : []
+  const sortedRepos = sortRepositoriesForPicker(allRows)
+  const defaultRow = sortedRepos.find((r) => r.is_default) || null
+
   return {
     assignment_run_id: row.assignment_run_id,
     course_id: assignmentRow?.course_id ?? null,
@@ -118,6 +135,13 @@ function mapAssignmentRun(row, assignmentRow, repositoryRow = null) {
     repository_created_at: repositoryRow?.created_at ?? null,
     is_default_repository: Boolean(repositoryRow?.is_default),
     has_repository: hasRepositoryContent(repositoryRow),
+    repositories: sortedRepos.map((r) => ({
+      repository_id: r.repository_id,
+      repository_name: r.repository_name,
+      is_default: Boolean(r.is_default),
+      created_at: r.created_at,
+    })),
+    default_repository_id: defaultRow?.repository_id ?? null,
   }
 }
 
@@ -619,9 +643,9 @@ async function loadAssignmentRunsByIds(assignmentRunIds) {
   if (error) throw error
 
   const assignmentMap = await loadAssignmentsByIds(unique((data || []).map((row) => row.assign_id)))
-  const repositoryMap = await loadRepositoriesByAssignmentRunIds(
-    unique((data || []).map((row) => row.assignment_run_id))
-  )
+  const runIds = unique((data || []).map((row) => row.assignment_run_id))
+  const repositoryMap = await loadRepositoriesByAssignmentRunIds(runIds)
+  const repositoryListMap = await loadRepositoryListsByAssignmentRunIds(runIds)
 
   return new Map(
     (data || []).map((row) => [
@@ -629,7 +653,8 @@ async function loadAssignmentRunsByIds(assignmentRunIds) {
       mapAssignmentRun(
         row,
         assignmentMap.get(String(row.assign_id)),
-        repositoryMap.get(String(row.assignment_run_id)) || null
+        repositoryMap.get(String(row.assignment_run_id)) || null,
+        repositoryListMap.get(String(row.assignment_run_id)) || []
       ),
     ])
   )
@@ -683,6 +708,26 @@ async function loadAllRepositoriesByAssignmentRunIds(assignmentRunIds) {
   if (error) throw error
 
   return new Map((data || []).map((row) => [String(row.repository_id), row]))
+}
+
+async function loadRepositoryListsByAssignmentRunIds(assignmentRunIds) {
+  if (!assignmentRunIds.length) return new Map()
+
+  const { data, error } = await supabase
+    .from('repositories')
+    .select(
+      'repository_id, assignment_run_id, repository_path, repository_name, is_default, created_at'
+    )
+    .in('assignment_run_id', assignmentRunIds)
+
+  if (error) throw error
+
+  return (data || []).reduce((accumulator, row) => {
+    const key = String(row.assignment_run_id)
+    if (!accumulator.has(key)) accumulator.set(key, [])
+    accumulator.get(key).push(row)
+    return accumulator
+  }, new Map())
 }
 
 async function createDefaultRepositoryRecord(assignmentRunId) {
@@ -1073,15 +1118,16 @@ export async function fetchInstructorAssignments(courseId) {
 
   if (runsError) throw runsError
 
-  const repositoryMap = await loadRepositoriesByAssignmentRunIds(
-    unique((runRows || []).map((row) => row.assignment_run_id))
-  )
+  const runIds = unique((runRows || []).map((row) => row.assignment_run_id))
+  const repositoryMap = await loadRepositoriesByAssignmentRunIds(runIds)
+  const repositoryListMap = await loadRepositoryListsByAssignmentRunIds(runIds)
 
   return (runRows || []).map((row) =>
     mapAssignmentRun(
       row,
       assignmentMap.get(String(row.assign_id)),
-      repositoryMap.get(String(row.assignment_run_id)) || null
+      repositoryMap.get(String(row.assignment_run_id)) || null,
+      repositoryListMap.get(String(row.assignment_run_id)) || []
     )
   )
 }

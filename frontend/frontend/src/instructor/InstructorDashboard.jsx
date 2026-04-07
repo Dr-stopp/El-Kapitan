@@ -88,6 +88,7 @@ export default function InstructorDashboard() {
   const [uploadLoading, setUploadLoading] = useState(false)
   const [exportingAssignmentId, setExportingAssignmentId] = useState(null)
   const [generatingAssignmentId, setGeneratingAssignmentId] = useState('')
+  const [selectedRepoByAssignment, setSelectedRepoByAssignment] = useState({})
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get('tab')
     return VALID_TABS.has(tabParam) ? tabParam : 'assignments'
@@ -636,8 +637,12 @@ export default function InstructorDashboard() {
       return
     }
 
-    if (!assignment?.repository_id || !assignment?.has_repository) {
-      window.alert('Upload a course repository for this assignment run before generating results.')
+    const selectedRepoId = selectedRepoByAssignment[assignment.assignment_run_id] || ''
+    const effectiveRepositoryId =
+      selectedRepoId || assignment?.default_repository_id || ''
+
+    if (!effectiveRepositoryId) {
+      window.alert('No repository available for this assignment yet — upload one first.')
       return
     }
 
@@ -646,7 +651,7 @@ export default function InstructorDashboard() {
     try {
       const response = await generateAssignmentResult({
         assignmentRunId: assignment.assignment_run_id,
-        repositoryId: assignment.repository_id,
+        repositoryId: effectiveRepositoryId,
       })
 
       refreshAssignmentData(selectedCourse.course_id)
@@ -1066,18 +1071,49 @@ export default function InstructorDashboard() {
                             {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
                           </button>
 
-                          <button
-                            className="btn-generate"
-                            onClick={() => handleGenerateResults(item)}
-                            disabled={
-                              generatingAssignmentId === String(item.assignment_run_id) ||
-                              !item.has_repository
-                            }
-                          >
-                            {generatingAssignmentId === String(item.assignment_run_id)
-                              ? 'Generating...'
-                              : 'Generate Result'}
-                          </button>
+                          <section className="compare-section">
+                            <h4 className="compare-section-title">
+                              Compare against course repository
+                            </h4>
+                            <select
+                              className="form-input compare-section-select"
+                              value={
+                                selectedRepoByAssignment[item.assignment_run_id] ?? ''
+                              }
+                              onChange={(event) =>
+                                setSelectedRepoByAssignment((previous) => ({
+                                  ...previous,
+                                  [item.assignment_run_id]: event.target.value,
+                                }))
+                              }
+                              disabled={
+                                generatingAssignmentId === String(item.assignment_run_id)
+                              }
+                            >
+                              <option value="">Select a repository…</option>
+                              {(item.repositories || []).map((repo) => (
+                                <option
+                                  key={repo.repository_id}
+                                  value={repo.repository_id}
+                                >
+                                  {repo.repository_name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="btn-generate"
+                              onClick={() => handleGenerateResults(item)}
+                              disabled={
+                                generatingAssignmentId === String(item.assignment_run_id) ||
+                                (!(selectedRepoByAssignment[item.assignment_run_id]) &&
+                                  !item.default_repository_id)
+                              }
+                            >
+                              {generatingAssignmentId === String(item.assignment_run_id)
+                                ? 'Generating...'
+                                : 'Generate Result'}
+                            </button>
+                          </section>
 
                           <button
                             className="btn-export"
