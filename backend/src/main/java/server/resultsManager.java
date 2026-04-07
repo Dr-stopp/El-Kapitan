@@ -12,7 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.OffsetDateTime;
-import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
@@ -54,7 +53,6 @@ public class resultsManager {
                     log.error("Checker failed on file index={} name={}", i, s.file.getName(), e);
                     throw e; // keep failing fast so submit returns error
                 }
-                i++;
             }
 
             int limit = Math.min(Math.max(topK, 0), candidates.size());
@@ -80,8 +78,12 @@ public class resultsManager {
             }
         }
 
-        log.info("All comparisons complete");
-        log.info("Results generated");
+            log.info("All comparisons complete");
+            log.info("Results generated");
+        } finally {
+            cleanupSubmissionTemps(submissions);
+            cleanupSubmissionTemps(repo);
+        }
     }
 
     private List<submission_rec> loadFiles(String bucket, long repositoryID, String language) throws IOException {
@@ -96,6 +98,7 @@ public class resultsManager {
             Path temp = Files.createTempFile("results-", suffix);
             Files.write(temp, content, StandardOpenOption.TRUNCATE_EXISTING);
             File file = temp.toFile();
+            file.deleteOnExit();
             submission_rec currSub = new submission_rec(sr.submission_ID, sr.filePath, file);
             files.add(currSub);
         }
@@ -105,8 +108,9 @@ public class resultsManager {
 
     private String resultsSections(PlagiarismResult info, UUID assignmentRunID, long repositoryID, long s1, long s2) {
         List<MatchNode> matchNodes = (info == null || info.matches == null) ? List.of() : info.matches;
+        Path csvPath = null;
         try {
-            Path csvPath = Files.createTempFile("results-sections-", ".csv");
+            csvPath = Files.createTempFile("results-sections-", ".csv");
             StringBuilder csv = new StringBuilder();
             csv.append("F1start,F1end,F2start,F2End").append(System.lineSeparator());
 
@@ -124,6 +128,30 @@ public class resultsManager {
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to create results CSV", e);
+        } finally {
+            if (csvPath != null) {
+                try {
+                    Files.deleteIfExists(csvPath);
+                } catch (IOException cleanupError) {
+                    log.warn("Failed to delete temp results CSV {}", csvPath, cleanupError);
+                }
+            }
+        }
+    }
+
+    private void cleanupSubmissionTemps(List<submission_rec> records) {
+        if (records == null) {
+            return;
+        }
+        for (submission_rec rec : records) {
+            if (rec == null || rec.file == null) {
+                continue;
+            }
+            try {
+                Files.deleteIfExists(rec.file.toPath());
+            } catch (IOException e) {
+                log.warn("Failed to delete temp submission file {}", rec.file.getAbsolutePath(), e);
+            }
         }
     }
 
