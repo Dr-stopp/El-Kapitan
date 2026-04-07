@@ -1036,40 +1036,6 @@ export default function InstructorDashboard() {
                               Last upload: {formatShortTimestamp(item.repository_created_at)}
                             </p>
                           )}
-                        </div>
-
-                        <div className="assignment-card-right">
-                          <span className="status-visible">{item.language === 'cpp' ? 'C++' : item.language === 'java' ? 'Java' : item.language?.toUpperCase()}</span>
-                          <span className="status-hidden">
-                            Top K {item.top_k} | Threshold {item.threshold}%
-                          </span>
-                          <span
-                            className={
-                              item.has_repository ? 'statusBadge status-complete' : 'statusBadge status-queued'
-                            }
-                          >
-                            {item.has_repository
-                              ? 'Course Repository Ready'
-                              : 'Course Repository Pending'}
-                          </span>
-
-                          <button className="btn-edit" onClick={() => openEditAssignmentForm(item)}>
-                            Edit
-                          </button>
-
-                          <button
-                            className="btn-upload"
-                            onClick={() => openRepositoryUploadForm(item)}
-                          >
-                            Upload Course Repo
-                          </button>
-
-                          <button
-                            className="btn-export"
-                            onClick={() => handleCopyKey(item.assignment_run_id)}
-                          >
-                            {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
-                          </button>
 
                           <section className="compare-section">
                             <h4 className="compare-section-title">
@@ -1114,7 +1080,44 @@ export default function InstructorDashboard() {
                                 : 'Generate Result'}
                             </button>
                           </section>
+                        </div>
 
+                        <div className="assignment-card-right">
+                          <div className="assignment-card-right-top">
+                            <span className="status-visible">{item.language === 'cpp' ? 'C++' : item.language === 'java' ? 'Java' : item.language?.toUpperCase()}</span>
+                            <span className="status-hidden">
+                              Top K {item.top_k} | Threshold {item.threshold}%
+                            </span>
+                            <span
+                              className={
+                                item.has_repository ? 'statusBadge status-complete' : 'statusBadge status-queued'
+                              }
+                            >
+                              {item.has_repository
+                                ? 'Course Repository Ready'
+                                : 'Course Repository Pending'}
+                            </span>
+
+                            <button className="btn-edit" onClick={() => openEditAssignmentForm(item)}>
+                              Edit
+                            </button>
+
+                            <button
+                              className="btn-upload"
+                              onClick={() => openRepositoryUploadForm(item)}
+                            >
+                              Upload Course Repo
+                            </button>
+
+                            <button
+                              className="btn-export"
+                              onClick={() => handleCopyKey(item.assignment_run_id)}
+                            >
+                              {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
+                            </button>
+                          </div>
+
+                          <div className="assignment-card-right-bottom">
                           <button
                             className="btn-export"
                             onClick={() => handleExportAssignment(item)}
@@ -1131,6 +1134,7 @@ export default function InstructorDashboard() {
                           >
                             Delete
                           </button>
+                          </div>
                         </div>
                       </div>
                     ))}
