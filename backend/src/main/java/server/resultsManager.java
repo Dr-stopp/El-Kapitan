@@ -33,29 +33,50 @@ public class resultsManager {
         String lang = dbHandler.getLang(assignmentRunID);
         List<submission_rec> submissions = loadFiles(SUBMISSIONBUCKET, dbHandler.getDefaultRepo(assignmentRunID), lang);
         List<submission_rec> repo = loadFiles(SUBMISSIONBUCKET, repositoryID, lang);
-        try {
-            List<Long> scores = new LinkedList<>();
-            //int topK = dbHandler.getTopK(assignmentRunID);
-            log.info("Running comparison for " + submissions.size() + " files. On " + repo.size() + " files.");
-            int i = 0;
+        int topK = dbHandler.getTopK(assignmentRunID);
+        log.info("Submitting: " + topK + " results");
+        log.info("Running comparison for " + submissions.size() + " files. On " + repo.size() + " files.");
+        int i = 0;
 
-            for (submission_rec s: submissions) {
-                for (submission_rec rs : repo) {
-                    try {
-                        dbHandler.checkPairExists(s.submission_ID, rs.submission_ID);
-                        PlagiarismChecker pc = new PlagiarismChecker(s.file, rs.file);
-                        scores.add((long) pc.PlagarismInfo.similarity*100);
-                        String resultPath = resultsSections(pc.PlagarismInfo, assignmentRunID, repositoryID, s.submission_ID, rs.submission_ID);
-                        log.info(String.valueOf(pc.PlagarismInfo.similarity));
-                        dbHandler.insertResult(s.submission_ID,rs.submission_ID,(long) (pc.PlagarismInfo.similarity*100) , OffsetDateTime.now(), dbHandler.generateResultID(), resultPath);
+        for (submission_rec s: submissions) {
+            List<ComparisonCandidate> candidates = new LinkedList<>();
 
-                    } catch (Exception e) {
-                        log.error("Checker failed on file index={} name={}", i, s.file.getName(), e);
-                        throw e; // keep failing fast so submit returns error
-                    }
-                    i++;
+            for (submission_rec rs : repo) {
+                try {
+                    dbHandler.checkPairExists(s.submission_ID, rs.submission_ID);
+                    PlagiarismChecker pc = new PlagiarismChecker(s.file, rs.file);
+                    long score = (long) (pc.PlagarismInfo.similarity * 100);
+                    candidates.add(new ComparisonCandidate(rs.submission_ID, score, pc.PlagarismInfo));
+                    log.info(String.valueOf(pc.PlagarismInfo.similarity));
+
+                } catch (Exception e) {
+                    log.error("Checker failed on file index={} name={}", i, s.file.getName(), e);
+                    throw e; // keep failing fast so submit returns error
                 }
             }
+
+            int limit = Math.min(Math.max(topK, 0), candidates.size());
+            candidates.sort(Comparator.comparingLong(ComparisonCandidate::score).reversed());
+
+            for (int j = 0; j < limit; j++) {
+                ComparisonCandidate candidate = candidates.get(j);
+                String resultPath = resultsSections(
+                        candidate.plagiarismResult(),
+                        assignmentRunID,
+                        repositoryID,
+                        s.submission_ID,
+                        candidate.comparedSubmissionId()
+                );
+                dbHandler.insertResult(
+                        s.submission_ID,
+                        candidate.comparedSubmissionId(),
+                        candidate.score(),
+                        OffsetDateTime.now(),
+                        dbHandler.generateResultID(),
+                        resultPath
+                );
+            }
+        }
 
             log.info("All comparisons complete");
             log.info("Results generated");
@@ -83,27 +104,6 @@ public class resultsManager {
         }
 
         return files;
-    }
-
-    private int[] getTopScores(int size, List<Long> scores) {
-        int[] toReturn = new int[size];
-        Long[] temp = scores.toArray(new Long[0]);
-        for (int i = 0; i < size; i++) {
-            int largest = findLargestIndex(temp);
-            toReturn[i] = largest;
-            temp[largest] = 0L;
-        }
-        return toReturn;
-    }
-
-    private int findLargestIndex(Long[] scores) {
-        int toReturn = 0;
-        for (int i = 1; i < scores.length; i++) {
-            if (scores[i] > scores[toReturn]) {
-                toReturn = i;
-            }
-        }
-        return toReturn;
     }
 
     private String resultsSections(PlagiarismResult info, UUID assignmentRunID, long repositoryID, long s1, long s2) {
@@ -154,5 +154,7 @@ public class resultsManager {
             }
         }
     }
+
+    private record ComparisonCandidate(long comparedSubmissionId, long score, PlagiarismResult plagiarismResult) { }
 
 }

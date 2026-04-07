@@ -5,8 +5,8 @@
 package Tokenizer.src;
 
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import org.antlr.v4.runtime.*;
 import org.slf4j.LoggerFactory;
 
@@ -17,14 +17,19 @@ import java.util.List;
 public class MultiLangTokenizer {
     List<String> ignoredTokens = new LinkedList();
 
-    public MultiLangTokenizer() throws FileNotFoundException, IOException{
-        //try (BufferedReader reader = new BufferedReader(new FileReader("backend/src/Main/resources/Ignore.txt"))) {
-        //   String line = reader.readLine();
-        //   while(line !=null){
-        //       ignoredTokens.add(line);
-        //       line = reader.readLine();
-        //   }
-        //
+    public MultiLangTokenizer() throws IOException{
+        InputStream ignoreStream = MultiLangTokenizer.class.getResourceAsStream("/Ignore.txt");
+        if (ignoreStream == null) {
+            throw new IOException("Missing resource: /Ignore.txt");
+        }
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(ignoreStream))) {
+            String line = reader.readLine();
+            while (line != null) {
+                ignoredTokens.add(line);
+                line = reader.readLine();
+            }
+        }
          
     }
 

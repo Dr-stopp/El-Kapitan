@@ -126,10 +126,18 @@ public class SubmitController {
     public ResponseEntity<String> result(
             @RequestParam("assignment") String assignmentRunID,
             @RequestParam("repository") long repositoryID
-    ) throws IOException {
-        log.info("Results requested");
-        results.generateResults(UUID.fromString(assignmentRunID), repositoryID);
-        return null;
+    ) {
+        try {
+            log.info("Results requested assignmentRunID={} repositoryID={}", assignmentRunID, repositoryID);
+            results.generateResults(UUID.fromString(assignmentRunID), repositoryID);
+            return ResponseEntity.ok("Results generated");
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid assignment_run_id received: {}", assignmentRunID, e);
+            return ResponseEntity.badRequest().body("Invalid assignment_run_id: " + assignmentRunID);
+        } catch (Exception e) {
+            log.error("Result generation failed assignmentRunID={} repositoryID={}", assignmentRunID, repositoryID, e);
+            return ResponseEntity.status(500).body("Result generation failed: " + e.getMessage());
+        }
     }
 
     @PostMapping(path = "/repository", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

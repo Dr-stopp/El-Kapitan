@@ -229,8 +229,13 @@ public class DBHandler {
 
     @Transactional
     public int getTopK(UUID assignment) {
-        String sql = "Select top_k from assignment_runs where assignment_run_id = " + assignment;
-        return jdbc.queryForObject(sql, Integer.class);
+        String sql = """
+                select top_k
+                from public."assignment_runs"
+                where assignment_run_id = ?
+                """;
+        Integer topK = jdbc.queryForObject(sql, Integer.class, assignment);
+        return topK == null ? 0 : topK;
     }
     @Transactional
     public String getCourse(UUID assignmentRun) {
