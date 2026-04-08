@@ -421,7 +421,7 @@ function buildStorageCandidateScore(candidatePath, originalPath) {
   return score
 }
 
-async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 40) {
+async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 40, bucket = 'Submissions') {
   const normalizedPrefix = normalizeStoragePath(prefix)
   const queue = [{ prefix: normalizedPrefix, depth: 0 }]
   const discoveredFiles = []
@@ -433,7 +433,7 @@ async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 4
     if (visitedPrefixes.has(cacheKey)) continue
     visitedPrefixes.add(cacheKey)
 
-    const { data, error } = await supabase.storage.from('Submissions').list(currentPrefix, {
+    const { data, error } = await supabase.storage.from(bucket).list(currentPrefix, {
       limit: 100,
       sortBy: { column: 'name', order: 'asc' },
     })
@@ -466,15 +466,18 @@ async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 4
   return discoveredFiles
 }
 
-async function downloadResolvedStorageBlob(objectPath) {
+async function downloadResolvedStorageBlob(objectPath, bucket = 'Submissions') {
   const normalizedPath = normalizeStoragePath(objectPath)
   if (!normalizedPath) {
     return { path: '', blob: null }
   }
 
-  const directDownload = await supabase.storage.from('Submissions').download(normalizedPath)
+  const directDownload = await supabase.storage.from(bucket).download(normalizedPath)
   if (!directDownload.error && directDownload.data) {
     return { path: normalizedPath, blob: directDownload.data }
+  }
+  if (directDownload.error) {
+    console.warn('[storage] direct download failed', bucket, normalizedPath, directDownload.error)
   }
 
   const candidatePrefixes = unique([
@@ -485,7 +488,7 @@ async function downloadResolvedStorageBlob(objectPath) {
   let discoveredFiles = []
 
   for (const prefix of candidatePrefixes) {
-    const listedFiles = await listStorageFilesRecursively(prefix)
+    const listedFiles = await listStorageFilesRecursively(prefix, 3, 40, bucket)
     if (listedFiles.length) {
       discoveredFiles = discoveredFiles.concat(listedFiles)
     }
@@ -502,7 +505,7 @@ async function downloadResolvedStorageBlob(objectPath) {
     return { path: normalizedPath, blob: null }
   }
 
-  const fallbackDownload = await supabase.storage.from('Submissions').download(bestPath)
+  const fallbackDownload = await supabase.storage.from(bucket).download(bestPath)
   if (fallbackDownload.error || !fallbackDownload.data) {
     return { path: bestPath, blob: null }
   }
@@ -510,33 +513,31 @@ async function downloadResolvedStorageBlob(objectPath) {
   return { path: bestPath, blob: fallbackDownload.data }
 }
 
-async function readStorageText(objectPath) {
-  if (!objectPath) return ''
-
-  const { path: resolvedPath, blob: data } = await downloadResolvedStorageBlob(objectPath)
-
-  if (!data) {
-    return ''
-  }
-
-  const normalizedPath = String(resolvedPath || objectPath || '').toLowerCase()
+async function blobToRenderableText(blob, pathHint) {
+  if (!blob) return ''
+  const normalizedPath = String(pathHint || '').toLowerCase()
 
   if (normalizedPath.endsWith('.zip') || normalizedPath.includes('.zip.')) {
     try {
-      const extractedText = await extractTextFromZipBlob(data)
-      if (extractedText) {
-        return extractedText
-      }
+      const extractedText = await extractTextFromZipBlob(blob)
+      if (extractedText) return extractedText
     } catch {
-      // Fall through to plain-text read in case the file only looks like a zip by name.
+      // fall through
     }
   }
 
-  const text = await data.text()
+  const text = await blob.text()
+  console.warn('[storage] blob text length=', text.length, 'path=', pathHint)
 
-  if (looksBinaryContent(resolvedPath || objectPath, text)) {
+  // For known source/text extensions, trust the extension and return text directly
+  // (avoids false positives in looksBinaryContent for files containing stray control chars).
+  if (hasRenderableSourceExtension(normalizedPath)) {
+    return text.replace(/\r\n/g, '\n')
+  }
+
+  if (looksBinaryContent(pathHint, text)) {
     try {
-      const extractedText = await extractTextFromZipBlob(data)
+      const extractedText = await extractTextFromZipBlob(blob)
       return extractedText || ''
     } catch {
       return ''
@@ -544,6 +545,59 @@ async function readStorageText(objectPath) {
   }
 
   return text.replace(/\r\n/g, '\n')
+}
+
+async function readStorageText(objectPath, bucket = 'Submissions') {
+  if (!objectPath) {
+    console.warn('[storage] readStorageText called with empty path')
+    return ''
+  }
+
+  const { path: resolvedPath, blob: data } = await downloadResolvedStorageBlob(objectPath, bucket)
+
+  if (data) {
+    const direct = await blobToRenderableText(data, resolvedPath || objectPath)
+    if (direct) return direct
+    console.warn('[storage] direct blob produced empty text', resolvedPath || objectPath)
+  }
+
+  // Folder fallback: enumerate every readable file under the prefix and concatenate.
+  const prefixesToTry = unique([
+    normalizeStoragePath(objectPath),
+    getParentStoragePrefix(objectPath),
+  ]).filter(Boolean)
+
+  const discovered = []
+  for (const prefix of prefixesToTry) {
+    const listed = await listStorageFilesRecursively(prefix, 3, 40, bucket)
+    if (listed.length) discovered.push(...listed)
+  }
+
+  const candidates = unique(discovered).filter(
+    (p) =>
+      hasRenderableSourceExtension(p) ||
+      p.toLowerCase().endsWith('.zip') ||
+      p.toLowerCase().includes('.zip.')
+  )
+
+  if (!candidates.length) {
+    console.warn('[storage] folder fallback found no readable files for', objectPath, 'discovered=', discovered)
+    return ''
+  }
+
+  candidates.sort((a, b) => a.localeCompare(b))
+
+  const rendered = []
+  for (const candidatePath of candidates.slice(0, 12)) {
+    const { data: blob } = await supabase.storage.from(bucket).download(candidatePath)
+    if (!blob) continue
+    const text = await blobToRenderableText(blob, candidatePath)
+    if (!text) continue
+    const fileName = getFileNameFromPath(candidatePath)
+    rendered.push(candidates.length > 1 ? `// File: ${fileName}\n${text}` : text)
+  }
+
+  return rendered.join('\n\n').trim()
 }
 
 function parseStoredSections(text) {
@@ -584,10 +638,9 @@ function parseStoredSections(text) {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
+  const header = lines[0]?.toLowerCase() ?? ''
   const dataLines =
-    lines[0]?.toLowerCase().includes('file_1_start') || lines[0]?.toLowerCase().includes('left')
-      ? lines.slice(1)
-      : lines
+    header.includes('file_1_start') || header.includes('left') ? lines.slice(1) : lines
 
   return dataLines
     .map((line, index) => {
@@ -879,7 +932,7 @@ async function loadComparisonSections(resultRow) {
     return directSections
   }
 
-  return parseStoredSections(await readStorageText(resultRow.result_path))
+  return parseStoredSections(await readStorageText(resultRow.result_path, 'Results'))
 }
 
 async function removeSubmissionStorageObjects(storagePaths) {
