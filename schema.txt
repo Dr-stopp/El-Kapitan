@@ -20,39 +20,41 @@ CREATE TABLE public.assignments (
 );
 CREATE TABLE public.courses (
   course_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  course_name character varying,
-  instructor uuid,
+  course_name character varying NOT NULL,
+  instructor uuid NOT NULL,
   CONSTRAINT courses_pkey PRIMARY KEY (course_id),
   CONSTRAINT courses_instructor_fkey FOREIGN KEY (instructor) REFERENCES auth.users(id)
 );
 CREATE TABLE public.repositories (
   repository_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  repository_path text,
-  is_default boolean,
-  repository_name text,
-  assignment_run_id uuid DEFAULT gen_random_uuid(),
+  repository_path text NOT NULL,
+  is_default boolean NOT NULL DEFAULT false,
+  repository_name text NOT NULL,
+  assignment_run_id uuid NOT NULL,
   CONSTRAINT repositories_pkey PRIMARY KEY (repository_id),
   CONSTRAINT repositories_assignment_run_id_fkey FOREIGN KEY (assignment_run_id) REFERENCES public.assignment_runs(assignment_run_id)
 );
 CREATE TABLE public.results (
-  score bigint,
-  date_created timestamp with time zone,
-  submission_1 bigint,
-  submission_2 bigint,
+  score bigint NOT NULL,
+  date_created timestamp with time zone NOT NULL DEFAULT now(),
+  submission_1 bigint NOT NULL,
+  submission_2 bigint NOT NULL,
   pair_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  result_path text,
+  result_path text NOT NULL,
   CONSTRAINT results_pkey PRIMARY KEY (pair_id),
   CONSTRAINT results_submission_1_fkey FOREIGN KEY (submission_1) REFERENCES public.submissions(submission_id),
   CONSTRAINT results_submission_2_fkey FOREIGN KEY (submission_2) REFERENCES public.submissions(submission_id)
 );
 CREATE TABLE public.submissions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  repository_id bigint,
-  student_id bigint NOT NULL,
+  repository_id bigint NOT NULL,
   folder_path text NOT NULL UNIQUE,
-  test_flag character varying,
   submission_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_first_name_enc text,
+  student_last_name_enc text,
+  student_email_enc text,
+  public_id text,
   CONSTRAINT submissions_pkey PRIMARY KEY (submission_id),
   CONSTRAINT submissions_repository_id_fkey FOREIGN KEY (repository_id) REFERENCES public.repositories(repository_id)
 );

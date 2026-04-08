@@ -88,18 +88,6 @@ async function loadAssignmentRun(assignmentRunId) {
   return assignmentRun
 }
 
-function hasRepositoryContent(repositoryRow) {
-  if (!repositoryRow) {
-    return false
-  }
-
-  const repositoryPath = String(repositoryRow.repository_path || '').trim()
-  const repositoryName = String(repositoryRow.repository_name || '').trim()
-  const hasMeaningfulName = repositoryName && !DEFAULT_REPOSITORY_NAMES.has(repositoryName)
-
-  return Boolean(repositoryPath || hasMeaningfulName)
-}
-
 async function loadRepositoriesForAssignmentRun(assignmentRunId) {
   const { data, error } = await supabase
     .from('repositories')
@@ -177,20 +165,8 @@ async function ensureDefaultRepositoryPlaceholder(assignmentRunId) {
   return insertRepositoryRecord(assignmentRunId, '', 'Default Repository', true)
 }
 
-async function syncInstructorRepositoryRecord({ assignmentRunId, file }) {
+async function syncInstructorRepositoryRecord({ assignmentRunId, file, repositoryName }) {
   await ensureDefaultRepositoryPlaceholder(assignmentRunId)
-
-  const existingRepositories = await loadRepositoriesForAssignmentRun(assignmentRunId)
-  const existingRepository = existingRepositories.find(
-    (repositoryRow) => !repositoryRow.is_default && hasRepositoryContent(repositoryRow)
-  )
-
-  if (existingRepository) {
-    return {
-      repository: existingRepository,
-      storagePath: existingRepository.repository_path || '',
-    }
-  }
 
   const storagePath = await uploadFileToStorage({
     assignmentRunId,
@@ -204,7 +180,7 @@ async function syncInstructorRepositoryRecord({ assignmentRunId, file }) {
     const repository = await insertRepositoryRecord(
       assignmentRunId,
       storagePath,
-      file?.name,
+      repositoryName,
       false
     )
 
@@ -252,6 +228,7 @@ export async function uploadSubmissionAsset({
 export async function uploadInstructorSourceAsset({
   assignmentRunId,
   file,
+  repositoryName,
   sourceKind = 'repository',
 }) {
   ensureSupabaseConfigured()
@@ -261,10 +238,34 @@ export async function uploadInstructorSourceAsset({
     throw new Error(fileError)
   }
 
+  const trimmedName = String(repositoryName || '').trim()
+  if (!trimmedName) {
+    throw new Error('Repository name is required.')
+  }
+
+  const lowerName = trimmedName.toLowerCase()
+  const reservedLowercase = new Set(
+    Array.from(DEFAULT_REPOSITORY_NAMES, (name) => name.toLowerCase())
+  )
+  if (reservedLowercase.has(lowerName)) {
+    throw new Error('That name is reserved. Please choose another.')
+  }
+
   const assignmentRun = await loadAssignmentRun(assignmentRunId)
+
+  const existingRepositories = await loadRepositoriesForAssignmentRun(
+    assignmentRun.assignment_run_id
+  )
+  const nameClash = existingRepositories.some(
+    (row) => String(row.repository_name || '').trim().toLowerCase() === lowerName
+  )
+  if (nameClash) {
+    throw new Error('A repository with that name already exists for this assignment.')
+  }
+
   const backendResponse = await uploadRepositorySourceToBackend({
     assignmentRunId: assignmentRun.assignment_run_id,
-    repositoryName: file?.name || 'Default Repository',
+    repositoryName: trimmedName,
     file,
   })
 
@@ -272,11 +273,12 @@ export async function uploadInstructorSourceAsset({
   let storagePath = ''
 
   try {
-    // The dashboard reads repository metadata from Supabase. If the backend leaves only
-    // a default placeholder row behind, try to persist the uploaded source here as a fallback.
+    // The dashboard reads repository metadata from Supabase. Persist the uploaded source
+    // here as a fallback so the dashboard reflects the user-provided repository name.
     ;({ repository, storagePath } = await syncInstructorRepositoryRecord({
       assignmentRunId: assignmentRun.assignment_run_id,
       file,
+      repositoryName: trimmedName,
     }))
   } catch (error) {
     console.warn(
