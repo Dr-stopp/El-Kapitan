@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  compactOpaqueIdentifier,
   formatAnalysisStateLabel,
   getDisplayStudentName,
   normalizeAnalysisState,
@@ -8,11 +9,11 @@ import {
 
 export default function ReviewQueuePanel({
   selectedCourse,
-  assignments,
   submissions,
   loading,
   error,
   privacyMode,
+  selectedAssignmentRunId,
 }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
@@ -27,33 +28,34 @@ export default function ReviewQueuePanel({
   const tableRef = useRef(null)
   const isSyncingScrollRef = useRef(false)
 
-  const availableAssignmentNames = useMemo(
-    () => assignments.map((item) => item.name),
-    [assignments]
-  )
-
-  const availableLanguages = useMemo(() => {
-    const uniqueLanguages = Array.from(
-      new Set(submissions.map((item) => item.language).filter(Boolean))
-    )
-    return uniqueLanguages.sort()
-  }, [submissions])
-
   const scopedSubmissions = useMemo(() => {
     if (!selectedCourse) return []
 
     return submissions
       .filter((item) => {
-        if (availableAssignmentNames.length === 0) return true
-        return availableAssignmentNames.includes(item.assignmentName)
+        if (!selectedAssignmentRunId || selectedAssignmentRunId === 'all') {
+          return true
+        }
+
+        return String(item.assignmentRunId || '') === String(selectedAssignmentRunId)
       })
       .map((item) => ({
         ...item,
         analysisState: normalizeAnalysisState(item.analysisState),
         displayStudentName: getDisplayStudentName(item.studentName, item.id, privacyMode),
+        fullStudentName: String(item.studentName || '').trim() || `Student ${item.id}`,
+        submissionReference: item.publicId || `#${item.id}`,
+        compactSubmissionReference: compactOpaqueIdentifier(item.publicId || `#${item.id}`),
         repositoryLabel: item.repositoryLabel || 'Course Repository',
       }))
-  }, [availableAssignmentNames, privacyMode, selectedCourse, submissions])
+  }, [privacyMode, selectedAssignmentRunId, selectedCourse, submissions])
+
+  const availableLanguages = useMemo(() => {
+    const uniqueLanguages = Array.from(
+      new Set(scopedSubmissions.map((item) => item.language).filter(Boolean))
+    )
+    return uniqueLanguages.sort()
+  }, [scopedSubmissions])
 
   const filteredSubmissions = useMemo(() => {
     let results = [...scopedSubmissions]
@@ -327,7 +329,12 @@ export default function ReviewQueuePanel({
                             onClick={() => setSelectedId(item.id)}
                           >
                             <td>
-                              <div className="submissionPrimary">{item.displayStudentName}</div>
+                              <div
+                                className="submissionPrimary reviewLongLabel"
+                                title={item.fullStudentName}
+                              >
+                                {item.displayStudentName}
+                              </div>
                             </td>
                             <td>
                               <div className="submissionSecondary">{item.assignmentName}</div>
@@ -371,9 +378,12 @@ export default function ReviewQueuePanel({
             <div className="teacherCard">
                 <div className="teacherSectionHeaderInline">
                   <h3>Selected Submission</h3>
-                  <span className="teacherSectionMeta">
+                  <span
+                    className="teacherSectionMeta selectedSubmissionMeta"
+                    title={selectedSubmission?.submissionReference || ''}
+                  >
                   {selectedSubmission
-                    ? selectedSubmission.publicId || `#${selectedSubmission.id}`
+                    ? selectedSubmission.compactSubmissionReference
                     : 'None'}
                 </span>
               </div>
@@ -384,11 +394,21 @@ export default function ReviewQueuePanel({
                 <div className="detailsStack">
                   <div className="detailRow">
                     <span>Submission ID</span>
-                    <strong>{selectedSubmission.publicId || `#${selectedSubmission.id}`}</strong>
+                    <strong
+                      className="detailValueBreak"
+                      title={selectedSubmission.submissionReference}
+                    >
+                      {selectedSubmission.submissionReference}
+                    </strong>
                   </div>
                   <div className="detailRow">
                     <span>Student</span>
-                    <strong>{selectedSubmission.displayStudentName}</strong>
+                    <strong
+                      className="detailValueBreak"
+                      title={selectedSubmission.fullStudentName}
+                    >
+                      {selectedSubmission.displayStudentName}
+                    </strong>
                   </div>
                   <div className="detailRow">
                     <span>Assignment</span>

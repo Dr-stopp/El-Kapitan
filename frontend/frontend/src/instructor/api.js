@@ -175,6 +175,14 @@ function isMissingRelation(error, relationName) {
   )
 }
 
+function isRepositorySubmissionForeignKeyError(error) {
+  const message = String(error?.message || '').toLowerCase()
+  const details = String(error?.details || '').toLowerCase()
+  const constraint = 'submissions_repository_id_fkey'
+
+  return message.includes(constraint) || details.includes(constraint)
+}
+
 function resolveInstructorId(instructor) {
   const directId =
     instructor && typeof instructor === 'object' ? String(instructor.id || '').trim() : String(instructor || '').trim()
@@ -956,7 +964,7 @@ async function deleteAssignmentRunGraph(assignmentRunIds, options = {}) {
   if (repositoryIds.length) {
     const { data, error: submissionsLookupError } = await supabase
       .from('submissions')
-      .select('submission_id, folder_path')
+      .select('submission_id, repository_id, folder_path')
       .in('repository_id', repositoryIds)
 
     if (submissionsLookupError) throw submissionsLookupError
@@ -971,20 +979,70 @@ async function deleteAssignmentRunGraph(assignmentRunIds, options = {}) {
     ...comparisonPaths,
   ])
 
-  if (submissionIds.length) {
+  if (repositoryIds.length) {
     const { error: submissionsDeleteError } = await supabase
       .from('submissions')
       .delete()
-      .in('submission_id', submissionIds)
+      .in('repository_id', repositoryIds)
 
     if (submissionsDeleteError) throw submissionsDeleteError
   }
 
   if (repositoryIds.length) {
-    const { error: repositoriesDeleteError } = await supabase
+    const { data: remainingSubmissionRows, error: remainingSubmissionsLookupError } = await supabase
+      .from('submissions')
+      .select('submission_id')
+      .in('repository_id', repositoryIds)
+
+    if (remainingSubmissionsLookupError) throw remainingSubmissionsLookupError
+
+    if ((remainingSubmissionRows || []).length) {
+      const { error: detachSubmissionsError } = await supabase
+        .from('submissions')
+        .update({ repository_id: null })
+        .in('repository_id', repositoryIds)
+
+      if (detachSubmissionsError) throw detachSubmissionsError
+
+      const {
+        data: stillLinkedSubmissionRows,
+        error: stillLinkedSubmissionsLookupError,
+      } = await supabase
+        .from('submissions')
+        .select('submission_id')
+        .in('repository_id', repositoryIds)
+
+      if (stillLinkedSubmissionsLookupError) throw stillLinkedSubmissionsLookupError
+
+      if ((stillLinkedSubmissionRows || []).length) {
+        throw new Error(
+          'Some submissions still reference this assignment run. Check Supabase delete/update policies for the submissions table.'
+        )
+      }
+    }
+  }
+
+  if (repositoryIds.length) {
+    let { error: repositoriesDeleteError } = await supabase
       .from('repositories')
       .delete()
       .in('repository_id', repositoryIds)
+
+    if (repositoriesDeleteError && isRepositorySubmissionForeignKeyError(repositoriesDeleteError)) {
+      const { error: detachFallbackError } = await supabase
+        .from('submissions')
+        .update({ repository_id: null })
+        .in('repository_id', repositoryIds)
+
+      if (detachFallbackError) throw detachFallbackError
+
+      const retryDeleteResponse = await supabase
+        .from('repositories')
+        .delete()
+        .in('repository_id', repositoryIds)
+
+      repositoriesDeleteError = retryDeleteResponse.error
+    }
 
     if (repositoriesDeleteError) throw repositoriesDeleteError
   }
@@ -1324,6 +1382,7 @@ export async function fetchReviewQueue(courseId) {
           publicId: getSubmissionPublicId(submission),
           submissionLabel: buildSubmissionReference(submission, submission.submission_id),
           studentName: mapUserName(submission, submission.submission_id),
+          assignmentRunId: String(repository?.assignment_run_id || ''),
           assignmentName: assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
           language: assignment?.language || 'Unknown',
           similarityScore,

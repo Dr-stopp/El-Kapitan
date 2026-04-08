@@ -274,6 +274,15 @@ export default function SubmissionComparePage() {
     [comparison?.id, comparison?.leftText, submissionId]
   )
   const repositoryOptions = comparison?.repositoryOptions || []
+  const matchedSourceFiles = useMemo(
+    () =>
+      parseStructuredSourceFiles(
+        comparison?.rightText || '',
+        comparison?.sourceLabel || 'Matched source'
+      ),
+    [comparison?.rightText, comparison?.sourceLabel]
+  )
+  const hasRepositoryChoices = repositoryOptions.length > 0
   const effectiveLeftFileId = leftFiles.some((file) => file.id === selectedLeftFileId)
     ? selectedLeftFileId
     : leftFiles[0]?.id || ''
@@ -287,6 +296,7 @@ export default function SubmissionComparePage() {
     let ignore = false
 
     if (
+      !hasRepositoryChoices ||
       !effectiveRightRepositoryId ||
       repositorySourcesById[effectiveRightRepositoryId] ||
       repositorySourceErrorsById[effectiveRightRepositoryId]
@@ -316,6 +326,7 @@ export default function SubmissionComparePage() {
       ignore = true
     }
   }, [
+    hasRepositoryChoices,
     effectiveRightRepositoryId,
     repositorySourceErrorsById,
     repositorySourcesById,
@@ -325,7 +336,10 @@ export default function SubmissionComparePage() {
     leftFiles.find((file) => file.id === effectiveLeftFileId) || leftFiles[0] || null
   const repositorySource = repositorySourcesById[effectiveRightRepositoryId] || null
   const repositorySourceError = repositorySourceErrorsById[effectiveRightRepositoryId] || ''
-  const rightFiles = useMemo(() => repositorySource?.files || [], [repositorySource])
+  const rightFiles = useMemo(
+    () => (hasRepositoryChoices ? repositorySource?.files || [] : matchedSourceFiles),
+    [hasRepositoryChoices, matchedSourceFiles, repositorySource]
+  )
   const preferredRightFileId = useMemo(() => {
     if (!rightFiles.length) return ''
 
@@ -358,7 +372,10 @@ export default function SubmissionComparePage() {
       (option) => option.repositoryId === effectiveRightRepositoryId
     ) || null
   const isRepositorySourceLoading = Boolean(
-    effectiveRightRepositoryId && !repositorySource && !repositorySourceError
+    hasRepositoryChoices &&
+      effectiveRightRepositoryId &&
+      !repositorySource &&
+      !repositorySourceError
   )
   const leftComparisonText = selectedLeftFile?.text || ''
   const rightComparisonText = selectedRightFile?.text || ''
@@ -388,11 +405,18 @@ export default function SubmissionComparePage() {
     extractComparisonFileLabel(comparison?.leftText, `Submission #${comparison?.id || submissionId}`)
   const rightFileLabel =
     selectedRightFile?.label ||
-    extractComparisonFileLabel(rightComparisonText, selectedRepositoryOption?.repositoryName || 'Repository file')
+    extractComparisonFileLabel(
+      rightComparisonText,
+      hasRepositoryChoices
+        ? selectedRepositoryOption?.repositoryName || 'Repository file'
+        : comparison?.sourceLabel || 'Matched source'
+    )
   const selectedRepositoryName =
-    selectedRepositoryOption?.repositoryName ||
-    repositorySource?.repositoryName ||
-    'Select a repository'
+    hasRepositoryChoices
+      ? selectedRepositoryOption?.repositoryName ||
+        repositorySource?.repositoryName ||
+        'Select a repository'
+      : 'Matched Submission'
 
   const leftRenderedRows = useMemo(
     () =>
@@ -488,7 +512,9 @@ export default function SubmissionComparePage() {
               <p className="teacherStatNote">{leftFileLabel}</p>
             </div>
             <div className="teacherStatCard">
-              <p className="teacherStatLabel">Reference Repository</p>
+              <p className="teacherStatLabel">
+                {hasRepositoryChoices ? 'Reference Repository' : 'Matched Source'}
+              </p>
               <h3 className="teacherStatValue compareSourceValue compareLongValue">
                 {selectedRepositoryName}
               </h3>
@@ -672,33 +698,35 @@ export default function SubmissionComparePage() {
               <div className="teacherCard comparePaneCard">
                 <div className="comparePaneHeader">
                   <div className="comparePaneHeaderMain">
-                    <h3>Repository File</h3>
+                    <h3>{hasRepositoryChoices ? 'Repository File' : 'Matched Source'}</h3>
                     <p className="teacherSectionMeta">
-                      {selectedRepositoryName}
+                      {hasRepositoryChoices ? selectedRepositoryName : comparison?.sourceLabel || selectedRepositoryName}
                       {rightFileLabel ? ` - ${rightFileLabel}` : ''}
                     </p>
                   </div>
                   <div className="comparePaneHeaderTools comparePaneHeaderToolsRight">
-                    <label className="compareInlineField" htmlFor="compare-right-repository">
-                      <span>Repository</span>
-                      <select
-                        id="compare-right-repository"
-                        className="teacherSelect compareSelect compareSelectCompact"
-                        value={effectiveRightRepositoryId}
-                        onChange={(event) => {
-                          setSelectedRightRepositoryId(event.target.value)
-                          setSelectedRightFileId('')
-                          setActiveBlockIndex(0)
-                        }}
-                        disabled={!comparison?.repositoryOptions?.length}
-                      >
-                        {(comparison?.repositoryOptions || []).map((option) => (
-                          <option key={option.repositoryId} value={option.repositoryId}>
-                            {option.repositoryName}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    {hasRepositoryChoices && (
+                      <label className="compareInlineField" htmlFor="compare-right-repository">
+                        <span>Repository</span>
+                        <select
+                          id="compare-right-repository"
+                          className="teacherSelect compareSelect compareSelectCompact"
+                          value={effectiveRightRepositoryId}
+                          onChange={(event) => {
+                            setSelectedRightRepositoryId(event.target.value)
+                            setSelectedRightFileId('')
+                            setActiveBlockIndex(0)
+                          }}
+                          disabled={!comparison?.repositoryOptions?.length}
+                        >
+                          {(comparison?.repositoryOptions || []).map((option) => (
+                            <option key={option.repositoryId} value={option.repositoryId}>
+                              {option.repositoryName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <label className="compareInlineField" htmlFor="compare-right-file">
                       <span>File</span>
                       <select
@@ -733,7 +761,7 @@ export default function SubmissionComparePage() {
                   </div>
                 </div>
 
-                {repositorySourceError && (
+                {hasRepositoryChoices && repositorySourceError && (
                   <div className="upload-feedback upload-feedback-error">{repositorySourceError}</div>
                 )}
 

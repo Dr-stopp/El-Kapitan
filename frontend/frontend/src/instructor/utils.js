@@ -53,12 +53,45 @@ export function persistPrivacyMode(mode) {
   window.localStorage.setItem(PRIVACY_STORAGE_KEY, mode)
 }
 
-export function getDisplayStudentName(studentName, fallbackId, privacyMode = 'masked') {
-  if (privacyMode === 'revealed') {
-    return studentName || `Student ${fallbackId}`
+export function looksOpaqueIdentifier(value = '') {
+  const normalized = String(value || '').trim()
+
+  if (normalized.length < 24) {
+    return false
   }
 
-  const stableId = String(fallbackId ?? studentName ?? '0000')
+  if (/\s/.test(normalized)) {
+    return false
+  }
+
+  return /^[A-Za-z0-9_-]+$/.test(normalized)
+}
+
+export function compactOpaqueIdentifier(value = '', startLength = 12, endLength = 8) {
+  const normalized = String(value || '').trim()
+
+  if (!normalized) {
+    return ''
+  }
+
+  if (
+    !looksOpaqueIdentifier(normalized) ||
+    normalized.length <= startLength + endLength + 1
+  ) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, startLength)}…${normalized.slice(-endLength)}`
+}
+
+export function getDisplayStudentName(studentName, fallbackId, privacyMode = 'masked') {
+  const normalizedStudentName = String(studentName || '').trim()
+
+  if (privacyMode === 'revealed') {
+    return compactOpaqueIdentifier(normalizedStudentName) || `Student ${fallbackId}`
+  }
+
+  const stableId = String(fallbackId ?? normalizedStudentName ?? '0000')
     .replace(/\W+/g, '')
     .slice(-4)
     .padStart(4, '0')
