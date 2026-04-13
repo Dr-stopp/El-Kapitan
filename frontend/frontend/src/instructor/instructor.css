@@ -97,6 +97,7 @@
   padding: 22px;
   box-shadow: 0 14px 32px rgba(43, 104, 161, 0.08);
   backdrop-filter: blur(8px);
+  min-width: 0;
 }
 
 .workspaceControlCard,
@@ -115,35 +116,10 @@
 
 .teacherHeroActions,
 .selectedActions,
-.modeSwitch {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .assignment-card-right {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-self: stretch;
-  align-items: flex-end;
-}
-
-.assignment-card-right-top {
-  display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.assignment-card-right-bottom {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: flex-end;
-  margin-top: auto;
 }
 
 .teacherEyebrow,
@@ -176,6 +152,12 @@
   line-height: 1.6;
 }
 
+.selectedSubmissionMeta {
+  max-width: min(100%, 22ch);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .teacherButton,
 .btn-new-assignment,
 .btn-upload,
@@ -185,8 +167,7 @@
 .btn-delete-course,
 .btn-form-submit,
 .scopeChip,
-.course-card,
-.modeBtn {
+.course-card {
   cursor: pointer;
   font: inherit;
 }
@@ -261,11 +242,37 @@
   gap: 16px;
 }
 
+.reportStatGrid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-items: stretch;
+}
+
+.reportStatGrid .teacherStatCard {
+  overflow: hidden;
+}
+
 .teacherStatValue {
   margin: 10px 0 0;
   font-size: clamp(1.4rem, 2.8vw, 2.3rem);
   line-height: 1.1;
   color: var(--el-text);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.compareLongValue {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: clamp(1.15rem, 2.2vw, 2.1rem);
+}
+
+.reportLongValue {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  max-width: 100%;
+  line-height: 1.08;
+  font-size: clamp(1rem, 2vw, 2rem);
 }
 
 .offeringStatValueSmall {
@@ -307,6 +314,13 @@
   min-width: 0;
 }
 
+.toolbarFieldStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 .toolbarFieldWide {
   grid-column: 1 / -1;
 }
@@ -333,27 +347,6 @@
 .toolbarField select:focus {
   border-color: var(--el-primary);
   box-shadow: 0 0 0 3px rgba(43, 104, 161, 0.16);
-}
-
-.modeSwitch {
-  padding: 4px;
-  border-radius: 16px;
-  background: rgba(224, 251, 252, 0.7);
-  border: 1px solid var(--el-border);
-}
-
-.modeBtn {
-  border: none;
-  background: transparent;
-  color: var(--el-text-muted);
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-weight: 700;
-}
-
-.modeBtn.active {
-  background: var(--el-primary);
-  color: #fff;
 }
 
 .scopeChipGrid {
@@ -574,8 +567,7 @@
 .btn-delete-course:disabled,
 .btn-form-submit:disabled,
 .scopeChip:disabled,
-.course-card:disabled,
-.modeBtn:disabled {
+.course-card:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
@@ -622,11 +614,54 @@
   background: rgba(255, 255, 255, 0.9);
 }
 
-.priorityActions {
+.priorityItemInteractive {
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.priorityItemInteractive:hover,
+.priorityItemInteractive:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(43, 104, 161, 0.28);
+  box-shadow: 0 10px 24px rgba(43, 104, 161, 0.08);
+  outline: none;
+}
+
+.priorityActionGroup {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 10px;
+}
+
+.priorityScoreButton {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  min-width: 94px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(43, 104, 161, 0.18);
+  background: rgba(224, 251, 252, 0.78);
+  color: var(--el-text);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.priorityScoreButton:hover,
+.priorityScoreButton:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(43, 104, 161, 0.36);
+  box-shadow: 0 10px 20px rgba(43, 104, 161, 0.08);
+  outline: none;
+}
+
+.priorityScoreHint {
+  color: var(--el-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .priorityScore {
@@ -636,14 +671,35 @@
   white-space: nowrap;
 }
 
-.teacherButtonSmall {
-  padding: 4px 12px;
-  font-size: 0.8rem;
-}
-
 .reviewTableWrap,
 .codePane {
   overflow: auto;
+}
+
+.reviewTableTopScrollShell {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.reviewTableTopScrollLabel {
+  color: var(--el-text-muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.reviewTableTopScroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(225, 217, 188, 0.9);
+  background: rgba(245, 240, 222, 0.6);
+  height: 16px;
+}
+
+.reviewTableTopScrollRail {
+  height: 1px;
 }
 
 .reviewTable {
@@ -679,17 +735,35 @@
   color: var(--el-text);
 }
 
+.reviewLongLabel {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .detailRow {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(225, 217, 188, 0.85);
 }
 
+.detailRow span {
+  flex: 0 0 112px;
+}
+
 .detailRow strong {
+  flex: 1 1 auto;
   color: var(--el-text);
   text-align: right;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.detailValueBreak {
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .detailRowBlock {
@@ -740,6 +814,10 @@
   gap: 20px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.compareSelect {
+  min-width: 0;
 }
 
 .compareControlGroup {
@@ -799,6 +877,43 @@
   align-items: flex-start;
 }
 
+.comparePaneHeaderMain {
+  min-width: 0;
+}
+
+.comparePaneHeaderTools {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.comparePaneHeaderToolsRight {
+  max-width: 100%;
+}
+
+.compareInlineField {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.compareInlineField span {
+  color: var(--el-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.compareSelectCompact {
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+}
+
 .comparePaneBadge {
   border-radius: 999px;
   background: rgba(224, 251, 252, 0.9);
@@ -831,7 +946,7 @@
 }
 
 .codeLine.matchColored {
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .codeLine.matchEmphasis {
@@ -928,7 +1043,8 @@
   }
 
   .compareControlBar,
-  .comparePaneHeader {
+  .comparePaneHeader,
+  .comparePaneHeaderTools {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -936,25 +1052,10 @@
   .compareDetailGrid {
     grid-template-columns: 1fr;
   }
-}
 
-.compare-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  margin-top: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.compare-section-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.compare-section-select {
-  width: 100%;
+  .compareInlineField,
+  .compareSelectCompact {
+    width: 100%;
+    min-width: 0;
+  }
 }

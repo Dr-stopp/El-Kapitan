@@ -90,7 +90,9 @@ export default function AnalyticsPanel({
                     priorityCases.map((item) => (
                       <div className="priorityItem" key={item.id}>
                         <div>
-                          <p className="priorityTitle">Submission #{item.id}</p>
+                          <p className="priorityTitle">
+                            {item.publicId || `Submission #${item.id}`}
+                          </p>
                           <p className="priorityMeta">
                             {item.language} | {item.status}
                           </p>

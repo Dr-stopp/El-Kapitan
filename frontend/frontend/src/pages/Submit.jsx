@@ -14,6 +14,7 @@ export default function Submit() {
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [receipt, setReceipt] = useState(null)
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -54,6 +55,7 @@ export default function Submit() {
     e.preventDefault()
     setError('')
     setSuccess('')
+    setReceipt(null)
 
     const fileErr = validateSubmissionFile(file, 'repository')
     if (fileErr) {
@@ -64,7 +66,8 @@ export default function Submit() {
     setLoading(true)
 
     try {
-      await uploadSubmissionAsset({
+      const submittedAssignmentKey = assignmentKey.trim()
+      const result = await uploadSubmissionAsset({
         assignmentRunId: assignmentKey,
         firstName,
         lastName,
@@ -73,7 +76,17 @@ export default function Submit() {
         submissionKind: 'file',
       })
 
-      setSuccess('Your assignment zip was uploaded successfully.')
+      const publicSubmissionId = String(result?.publicSubmissionId || '').trim()
+      setSuccess(
+        publicSubmissionId
+          ? 'Your assignment zip was uploaded successfully. Save the submission ID below for reference.'
+          : 'Your assignment zip was uploaded successfully.'
+      )
+      setReceipt({
+        assignmentKey: submittedAssignmentKey,
+        publicSubmissionId,
+        submittedAt: new Date().toISOString(),
+      })
       setAssignmentKey('')
       setFirstName('')
       setLastName('')
@@ -104,6 +117,31 @@ export default function Submit() {
       {success && (
         <div className="bg-green-50 border border-green-200 text-success rounded-lg px-4 py-3 mb-6 text-sm">
           {success}
+        </div>
+      )}
+
+      {receipt && (
+        <div className="bg-white border border-warm rounded-lg px-4 py-4 mb-6 text-sm shadow-sm">
+          <div className="font-semibold text-primary mb-2">Submission Receipt</div>
+          <div className="flex flex-col gap-1 text-text">
+            <div>
+              <span className="font-medium">Assignment Key:</span> {receipt.assignmentKey}
+            </div>
+            <div>
+              <span className="font-medium">Submission ID:</span>{' '}
+              {receipt.publicSubmissionId || 'Not returned by the backend'}
+            </div>
+            <div>
+              <span className="font-medium">Submitted:</span>{' '}
+              {new Date(receipt.submittedAt).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </div>
+          </div>
         </div>
       )}
 

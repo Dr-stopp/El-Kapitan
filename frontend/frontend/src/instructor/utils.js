@@ -1,7 +1,5 @@
 export const DEFAULT_REPOSITORY_LABEL = 'Course Repository'
 
-const PRIVACY_STORAGE_KEY = 'elkapitan-instructor-privacy-mode'
-
 export function formatDueDate(value) {
   const date = new Date(value)
 
@@ -43,27 +41,40 @@ export function getRepositoryLabel() {
   return DEFAULT_REPOSITORY_LABEL
 }
 
-export function getInitialPrivacyMode() {
-  if (typeof window === 'undefined') return 'masked'
-  return window.localStorage.getItem(PRIVACY_STORAGE_KEY) || 'masked'
-}
+export function looksOpaqueIdentifier(value = '') {
+  const normalized = String(value || '').trim()
 
-export function persistPrivacyMode(mode) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(PRIVACY_STORAGE_KEY, mode)
-}
-
-export function getDisplayStudentName(studentName, fallbackId, privacyMode = 'masked') {
-  if (privacyMode === 'revealed') {
-    return studentName || `Student ${fallbackId}`
+  if (normalized.length < 24) {
+    return false
   }
 
-  const stableId = String(fallbackId ?? studentName ?? '0000')
-    .replace(/\W+/g, '')
-    .slice(-4)
-    .padStart(4, '0')
+  if (/\s/.test(normalized)) {
+    return false
+  }
 
-  return `Student ${stableId}`
+  return /^[A-Za-z0-9_-]+$/.test(normalized)
+}
+
+export function compactOpaqueIdentifier(value = '', startLength = 12, endLength = 8) {
+  const normalized = String(value || '').trim()
+
+  if (!normalized) {
+    return ''
+  }
+
+  if (
+    !looksOpaqueIdentifier(normalized) ||
+    normalized.length <= startLength + endLength + 1
+  ) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, startLength)}…${normalized.slice(-endLength)}`
+}
+
+export function getDisplayStudentName(studentName, fallbackId) {
+  const normalizedStudentName = String(studentName || '').trim()
+  return compactOpaqueIdentifier(normalizedStudentName) || `Student ${fallbackId}`
 }
 
 export function getSimilarityBand(score = 0) {
@@ -87,7 +98,38 @@ export function formatAnalysisStateLabel(value = '') {
   return state.charAt(0).toUpperCase() + state.slice(1)
 }
 
+function extractFallbackFileLabel(text = '', fallback = 'Source file') {
+  const candidateLines = String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+
+  for (const line of candidateLines) {
+    const beginFileMatch = line.match(/begin file:\s*(.+?)\s*=*$/i)
+    if (beginFileMatch?.[1]) {
+      return beginFileMatch[1].trim()
+    }
+
+    const fileHeaderMatch = line.match(/^\/\/\s*file:\s*(.+?)\s*$/i)
+    if (fileHeaderMatch?.[1]) {
+      return fileHeaderMatch[1].trim()
+    }
+
+    if (/^[\w./-]+\.[a-z0-9]+$/i.test(line)) {
+      return line
+    }
+  }
+
+  return fallback
+}
+
 const normalizeCodeLine = (line) => line.trim().replace(/\s+/g, ' ')
+const normalizeComparableCodeLine = (line) =>
+  normalizeCodeLine(line)
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/\b\d+\b/g, '0')
 
 function buildContiguousBlocksFromLines(lineModels = []) {
   const blocks = []
@@ -162,24 +204,84 @@ function buildMatchedBlocks(leftLines, rightLines, sections) {
 }
 
 export function extractComparisonFileLabel(text = '', fallback = 'Source file') {
-  const candidateLines = String(text || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 6)
+  const files = parseStructuredSourceFiles(text, fallback)
+  return files[0]?.label || extractFallbackFileLabel(text, fallback)
+}
 
-  for (const line of candidateLines) {
-    const beginFileMatch = line.match(/begin file:\s*(.+?)\s*=*$/i)
+export function parseStructuredSourceFiles(text = '', fallback = 'Source file') {
+  const normalizedText = String(text || '').replace(/\r\n/g, '\n')
+
+  if (!normalizedText.trim()) {
+    return []
+  }
+
+  const lines = normalizedText.split('\n')
+  const parsedFiles = []
+  let currentFile = null
+
+  const pushCurrentFile = () => {
+    if (!currentFile) return
+
+    parsedFiles.push({
+      id: `${parsedFiles.length + 1}:${currentFile.label}`,
+      label: currentFile.label,
+      text: currentFile.lines.join('\n').replace(/\n+$/, ''),
+    })
+    currentFile = null
+  }
+
+  for (const line of lines) {
+    const beginFileMatch = line.match(/^\s*\/\/=+\s*BEGIN FILE:\s*(.+?)\s*=*\s*$/i)
     if (beginFileMatch?.[1]) {
-      return beginFileMatch[1].trim()
+      pushCurrentFile()
+      currentFile = {
+        label: beginFileMatch[1].trim(),
+        lines: [],
+      }
+      continue
     }
 
-    if (/^[\w.-]+\.[a-z0-9]+$/i.test(line)) {
-      return line
+    const endFileMatch = line.match(/^\s*\/\/=+\s*END FILE:\s*(.+?)\s*=*\s*$/i)
+    if (endFileMatch?.[1]) {
+      pushCurrentFile()
+      continue
+    }
+
+    const zipFileHeaderMatch = line.match(/^\s*\/\/\s*File:\s*(.+?)\s*$/i)
+    if (zipFileHeaderMatch?.[1]) {
+      pushCurrentFile()
+      currentFile = {
+        label: zipFileHeaderMatch[1].trim(),
+        lines: [],
+      }
+      continue
+    }
+
+    if (currentFile) {
+      currentFile.lines.push(line)
     }
   }
 
-  return fallback
+  pushCurrentFile()
+
+  if (parsedFiles.length) {
+    return parsedFiles.map((file, index) => ({
+      ...file,
+      id: `${index + 1}:${file.label}`,
+      index,
+    }))
+  }
+
+  const fallbackLabel = extractFallbackFileLabel(normalizedText, fallback)
+
+  return [
+    {
+      id: `1:${fallbackLabel}`,
+      label: fallbackLabel,
+      text: normalizedText.replace(/\n+$/, ''),
+      index: 0,
+    },
+  ]
 }
 
 export function buildComparisonViewModel(leftText = '', rightText = '', sections = []) {
@@ -188,10 +290,18 @@ export function buildComparisonViewModel(leftText = '', rightText = '', sections
   const rightNormalizedSet = new Set(
     rightRawLines.map(normalizeCodeLine).filter((line) => line.length > 3)
   )
+  const rightComparableSet = new Set(
+    rightRawLines.map(normalizeComparableCodeLine).filter((line) => line.length > 3)
+  )
   const sharedLines = new Set(
     leftRawLines
       .map(normalizeCodeLine)
       .filter((line) => line.length > 3 && rightNormalizedSet.has(line))
+  )
+  const comparableSharedLines = new Set(
+    leftRawLines
+      .map(normalizeComparableCodeLine)
+      .filter((line) => line.length > 3 && rightComparableSet.has(line))
   )
 
   const matchedLineNumbers = {
@@ -211,6 +321,7 @@ export function buildComparisonViewModel(leftText = '', rightText = '', sections
   const toLineModels = (lines, side) =>
     lines.map((text, index) => {
       const normalized = normalizeCodeLine(text)
+      const comparableNormalized = normalizeComparableCodeLine(text)
       const lineNumber = index + 1
       const hasStoredMatches = matchedLineNumbers[side].size > 0
 
@@ -219,7 +330,9 @@ export function buildComparisonViewModel(leftText = '', rightText = '', sections
         text,
         matched: hasStoredMatches
           ? matchedLineNumbers[side].has(lineNumber)
-          : normalized.length > 3 && sharedLines.has(normalized),
+          : (normalized.length > 3 && sharedLines.has(normalized)) ||
+            (comparableNormalized.length > 3 &&
+              comparableSharedLines.has(comparableNormalized)),
       }
     })
 
