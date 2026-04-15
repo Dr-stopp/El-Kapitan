@@ -115,11 +115,35 @@
 }
 
 .teacherHeroActions,
-.selectedActions,
-.assignment-card-right {
+.selectedActions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.assignment-card-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: stretch;
+  align-items: flex-end;
+}
+
+.assignment-card-right-top {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.assignment-card-right-bottom {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-end;
+  margin-top: auto;
 }
 
 .teacherEyebrow,
@@ -664,6 +688,13 @@
   letter-spacing: 0.06em;
 }
 
+.priorityActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 .priorityScore {
   font-size: 1.1rem;
   font-weight: 800;
@@ -671,35 +702,14 @@
   white-space: nowrap;
 }
 
+.teacherButtonSmall {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+}
+
 .reviewTableWrap,
 .codePane {
   overflow: auto;
-}
-
-.reviewTableTopScrollShell {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.reviewTableTopScrollLabel {
-  color: var(--el-text-muted);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.reviewTableTopScroll {
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-radius: 999px;
-  border: 1px solid rgba(225, 217, 188, 0.9);
-  background: rgba(245, 240, 222, 0.6);
-  height: 16px;
-}
-
-.reviewTableTopScrollRail {
-  height: 1px;
 }
 
 .reviewTable {
@@ -946,7 +956,7 @@
 }
 
 .codeLine.matchColored {
-  transition: box-shadow 0.15s ease, background-color 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
 .codeLine.matchEmphasis {
@@ -1058,4 +1068,25 @@
     width: 100%;
     min-width: 0;
   }
+}
+
+.compare-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.compare-section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.compare-section-select {
+  width: 100%;
 }

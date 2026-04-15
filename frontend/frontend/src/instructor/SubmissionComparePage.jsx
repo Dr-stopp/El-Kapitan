@@ -232,7 +232,6 @@ export default function SubmissionComparePage() {
 
   const leftPaneRef = useRef(null)
   const rightPaneRef = useRef(null)
-  const syncingScrollRef = useRef(false)
 
   useEffect(() => {
     let ignore = false
@@ -459,17 +458,6 @@ export default function SubmissionComparePage() {
     scrollPaneToLine(rightPaneRef, activeBlock.rightStartLine)
   }, [activeBlock, viewMode])
 
-  const syncScroll = (sourceRef, targetRef) => {
-    if (syncingScrollRef.current || !sourceRef.current || !targetRef.current) return
-
-    syncingScrollRef.current = true
-    targetRef.current.scrollTop = sourceRef.current.scrollTop
-
-    window.requestAnimationFrame(() => {
-      syncingScrollRef.current = false
-    })
-  }
-
   return (
     <div className="dashboard instructor-shell">
       <div className="teacherCard">
@@ -618,12 +606,12 @@ export default function SubmissionComparePage() {
               <div className="teacherCard comparePaneCard">
                 <div className="comparePaneHeader">
                   <div className="comparePaneHeaderMain">
-                    <h3>Submission Text</h3>
+                    <h3>Assignment Source</h3>
                     <p className="teacherSectionMeta">{leftFileLabel}</p>
                   </div>
                   <div className="comparePaneHeaderTools">
                     <label className="compareInlineField" htmlFor="compare-left-file">
-                      <span>File</span>
+                      <span>Assignment</span>
                       <select
                         id="compare-left-file"
                         className="teacherSelect compareSelect compareSelectCompact"
@@ -654,7 +642,6 @@ export default function SubmissionComparePage() {
                   <div
                     ref={leftPaneRef}
                     className="codePane"
-                    onScroll={() => syncScroll(leftPaneRef, rightPaneRef)}
                   >
                     {leftRenderedRows.map((row) =>
                       row.type === 'gap' ? (
@@ -775,7 +762,6 @@ export default function SubmissionComparePage() {
                   <div
                     ref={rightPaneRef}
                     className="codePane"
-                    onScroll={() => syncScroll(rightPaneRef, leftPaneRef)}
                   >
                     {rightRenderedRows.map((row) =>
                       row.type === 'gap' ? (

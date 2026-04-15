@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   compactOpaqueIdentifier,
@@ -19,13 +19,7 @@ export default function ReviewQueuePanel({
   const [languageFilter, setLanguageFilter] = useState('All')
   const [sortBy, setSortBy] = useState('similarity')
   const [selectedId, setSelectedId] = useState(null)
-  const [tableScrollWidth, setTableScrollWidth] = useState(0)
-  const [tableViewportWidth, setTableViewportWidth] = useState(0)
   const navigate = useNavigate()
-  const topScrollRef = useRef(null)
-  const tableWrapRef = useRef(null)
-  const tableRef = useRef(null)
-  const isSyncingScrollRef = useRef(false)
 
   const scopedSubmissions = useMemo(() => {
     if (!selectedCourse) return []
@@ -97,46 +91,6 @@ export default function ReviewQueuePanel({
 
   const selectedSubmission =
     filteredSubmissions.find((item) => item.id === effectiveSelectedId) ?? null
-  const showTopScrollbar =
-    filteredSubmissions.length > 0 && tableScrollWidth > tableViewportWidth + 1
-
-  useEffect(() => {
-    const updateScrollMetrics = () => {
-      setTableScrollWidth(tableRef.current?.scrollWidth || 0)
-      setTableViewportWidth(tableWrapRef.current?.clientWidth || 0)
-    }
-
-    updateScrollMetrics()
-
-    const resizeObserver =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateScrollMetrics) : null
-
-    if (tableWrapRef.current) {
-      resizeObserver?.observe(tableWrapRef.current)
-    }
-
-    if (tableRef.current) {
-      resizeObserver?.observe(tableRef.current)
-    }
-
-    window.addEventListener('resize', updateScrollMetrics)
-
-    return () => {
-      resizeObserver?.disconnect()
-      window.removeEventListener('resize', updateScrollMetrics)
-    }
-  }, [filteredSubmissions.length])
-
-  const syncHorizontalScroll = (sourceRef, targetRef) => {
-    if (!sourceRef.current || !targetRef.current || isSyncingScrollRef.current) return
-
-    isSyncingScrollRef.current = true
-    targetRef.current.scrollLeft = sourceRef.current.scrollLeft
-
-    requestAnimationFrame(() => {
-      isSyncingScrollRef.current = false
-    })
-  }
 
   const handleExportQueue = () => {
     const exportRows = filteredSubmissions.map((item) => ({
@@ -211,7 +165,7 @@ export default function ReviewQueuePanel({
                 <div>
                   <h3>Filters</h3>
                   <p className="teacherSectionMeta">
-                    Narrow the queue by masked student label, language, or review status.
+                    Narrow the queue by student label, language, or review status.
                   </p>
                 </div>
               </div>
@@ -285,29 +239,8 @@ export default function ReviewQueuePanel({
                   No submissions matched the current filters.
                 </div>
               ) : (
-                <>
-                  {showTopScrollbar && (
-                    <div className="reviewTableTopScrollShell">
-                      <div className="reviewTableTopScrollLabel">Scroll for more columns</div>
-                      <div
-                        ref={topScrollRef}
-                        className="reviewTableTopScroll"
-                        onScroll={() => syncHorizontalScroll(topScrollRef, tableWrapRef)}
-                        aria-hidden="true"
-                      >
-                        <div
-                          className="reviewTableTopScrollRail"
-                          style={{ width: `${tableScrollWidth}px` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <div
-                    ref={tableWrapRef}
-                    className="reviewTableWrap"
-                    onScroll={() => syncHorizontalScroll(tableWrapRef, topScrollRef)}
-                  >
-                    <table ref={tableRef} className="reviewTable">
+                <div className="reviewTableWrap">
+                    <table className="reviewTable">
                       <thead>
                         <tr>
                           <th>Student</th>
@@ -367,8 +300,7 @@ export default function ReviewQueuePanel({
                         ))}
                       </tbody>
                     </table>
-                  </div>
-                </>
+                </div>
               )}
             </div>
           </div>

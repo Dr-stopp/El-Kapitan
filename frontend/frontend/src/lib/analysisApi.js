@@ -26,14 +26,8 @@ function buildBackendUrl(path, missingMessage) {
   return `${backendApiBaseUrl}${normalizedPath}`
 }
 
-function buildNetworkErrorMessage(error, { mayHaveSucceeded = false } = {}) {
-  const suffix = mayHaveSucceeded
-    ? ' The request may have succeeded, but the browser did not receive a clean response back from the backend.'
-    : ''
-  const detail = String(error?.message || '').trim()
-  const detailSuffix = detail ? ` (${detail})` : ''
-
-  return `Unable to reach the analysis backend. Check that the Railway URL is correct, the backend is running, and CORS allows this frontend origin.${suffix}${detailSuffix}`
+function buildNetworkErrorMessage() {
+  return 'Unable to reach the analysis backend. Check that the Railway URL is correct, the backend is running, and CORS allows this frontend origin.'
 }
 
 async function parseAnalysisResponse(response) {
@@ -85,8 +79,8 @@ export async function generateAssignmentResult({ assignmentRunId, repositoryId }
         body: formData,
       }
     )
-  } catch (error) {
-    throw new Error(buildNetworkErrorMessage(error))
+  } catch {
+    throw new Error(buildNetworkErrorMessage())
   }
 
   const payload = await parseAnalysisResponse(response)
@@ -146,12 +140,8 @@ export async function submitStudentWorkToBackend({
         body: formData,
       }
     )
-  } catch (error) {
-    throw new Error(
-      buildNetworkErrorMessage(error, {
-        mayHaveSucceeded: true,
-      })
-    )
+  } catch {
+    throw new Error(buildNetworkErrorMessage())
   }
 
   const payload = await parseAnalysisResponse(response)
@@ -200,8 +190,8 @@ export async function uploadRepositorySourceToBackend({
         body: formData,
       }
     )
-  } catch (error) {
-    throw new Error(buildNetworkErrorMessage(error))
+  } catch {
+    throw new Error(buildNetworkErrorMessage())
   }
 
   const payload = await parseAnalysisResponse(response)

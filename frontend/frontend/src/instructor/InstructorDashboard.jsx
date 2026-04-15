@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import {
   UPLOAD_OPTIONS,
@@ -56,8 +57,12 @@ function getLanguageBreakdown(assignments) {
   return topLanguage ? `${topLanguage[0]} (${topLanguage[1]})` : 'No assignments'
 }
 
+const VALID_TABS = new Set(['assignments', 'review', 'analytics'])
+
 export default function InstructorDashboard() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pendingCourseIdRef = useRef(searchParams.get('courseId'))
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [deletingCourse, setDeletingCourse] = useState(false)
@@ -75,13 +80,18 @@ export default function InstructorDashboard() {
   const [formDueTime, setFormDueTime] = useState('')
   const [uploadingAssignment, setUploadingAssignment] = useState(null)
   const [uploadFile, setUploadFile] = useState(null)
+  const [uploadName, setUploadName] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [uploadLoading, setUploadLoading] = useState(false)
   const [exportingAssignmentId, setExportingAssignmentId] = useState(null)
   const [generatingAssignmentId, setGeneratingAssignmentId] = useState('')
-  const [activeTab, setActiveTab] = useState('assignments')
+  const [selectedRepoByAssignment, setSelectedRepoByAssignment] = useState({})
   const [selectedReviewAssignmentRunId, setSelectedReviewAssignmentRunId] = useState('all')
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = searchParams.get('tab')
+    return VALID_TABS.has(tabParam) ? tabParam : 'assignments'
+  })
   const [submissions, setSubmissions] = useState([])
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
   const [submissionsError, setSubmissionsError] = useState('')
@@ -117,6 +127,25 @@ export default function InstructorDashboard() {
       ignore = true
     }
   }, [user])
+
+  useEffect(() => {
+    if (!pendingCourseIdRef.current || courses.length === 0) return
+    const targetId = pendingCourseIdRef.current
+    pendingCourseIdRef.current = null
+    const match = courses.find((c) => String(c.course_id) === targetId)
+    if (match) handleCourseSelection(match)
+  }, [courses])
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (selectedCourse?.course_id) {
+      params.set('courseId', String(selectedCourse.course_id))
+    }
+    if (activeTab && activeTab !== 'assignments') {
+      params.set('tab', activeTab)
+    }
+    setSearchParams(params, { replace: true })
+  }, [selectedCourse, activeTab, setSearchParams])
 
   useEffect(() => {
     if (!selectedCourse) return
@@ -233,7 +262,6 @@ export default function InstructorDashboard() {
 
   const handleCourseSelection = (course) => {
     setSelectedCourse(course)
-    setSelectedReviewAssignmentRunId('all')
     setEditingCourse(null)
     setEditingAssignment(null)
     setUploadingAssignment(null)
@@ -242,6 +270,7 @@ export default function InstructorDashboard() {
     setAnalyticsLoading(Boolean(course))
     setSubmissionsError('')
     setAnalyticsError('')
+    setSelectedReviewAssignmentRunId('all')
 
     if (!course) {
       setAssignments([])
@@ -293,6 +322,7 @@ export default function InstructorDashboard() {
 
   const resetRepositoryUploadForm = () => {
     setUploadFile(null)
+    setUploadName('')
     setUploadError('')
     setUploadSuccess('')
   }
@@ -494,6 +524,13 @@ export default function InstructorDashboard() {
       return
     }
 
+    const trimmedName = uploadName.trim()
+    if (!trimmedName) {
+      setUploadSuccess('')
+      setUploadError('Please enter a repository name.')
+      return
+    }
+
     setUploadLoading(true)
     setUploadError('')
     setUploadSuccess('')
@@ -502,6 +539,7 @@ export default function InstructorDashboard() {
       const response = await uploadInstructorSourceAsset({
         assignmentRunId: uploadingAssignment.assignment_run_id,
         file: uploadFile,
+        repositoryName: trimmedName,
         sourceKind: 'repository',
       })
 
@@ -533,7 +571,7 @@ export default function InstructorDashboard() {
                   repository_id: repositoryId ?? item.repository_id,
                   repository_name:
                     syncedRepository?.repository_name ||
-                    uploadFile?.name ||
+                    trimmedName ||
                     item.repository_name ||
                     'Uploaded Repository',
                   repository_path:
@@ -555,7 +593,7 @@ export default function InstructorDashboard() {
               repository_id: repositoryId ?? previous.repository_id,
               repository_name:
                 syncedRepository?.repository_name ||
-                uploadFile?.name ||
+                trimmedName ||
                 previous.repository_name ||
                 'Uploaded Repository',
               repository_path:
@@ -574,6 +612,7 @@ export default function InstructorDashboard() {
       setUploadError('')
       setUploadSuccess(backendMessage)
       setUploadFile(null)
+      setUploadName('')
 
       if (selectedCourse?.course_id) {
         refreshSubmissionData(selectedCourse.course_id)
@@ -616,8 +655,12 @@ export default function InstructorDashboard() {
       return
     }
 
-    if (!assignment?.repository_id || !assignment?.has_repository) {
-      window.alert('Upload a course repository for this assignment run before generating results.')
+    const selectedRepoId = selectedRepoByAssignment[assignment.assignment_run_id] || ''
+    const effectiveRepositoryId =
+      selectedRepoId || assignment?.default_repository_id || ''
+
+    if (!effectiveRepositoryId) {
+      window.alert('No repository available for this assignment yet — upload one first.')
       return
     }
 
@@ -626,7 +669,7 @@ export default function InstructorDashboard() {
     try {
       const response = await generateAssignmentResult({
         assignmentRunId: assignment.assignment_run_id,
-        repositoryId: assignment.repository_id,
+        repositoryId: effectiveRepositoryId,
       })
 
       refreshAssignmentData(selectedCourse.course_id)
@@ -780,7 +823,7 @@ export default function InstructorDashboard() {
                       key={assignment.assignment_run_id}
                       value={assignment.assignment_run_id}
                     >
-                      {assignment.name} · {formatDueDate(assignment.due_date)}
+                      {assignment.name} - {formatDueDate(assignment.due_date)}
                     </option>
                   ))}
                 </select>
@@ -1015,54 +1058,88 @@ export default function InstructorDashboard() {
                               Last upload: {formatShortTimestamp(item.repository_created_at)}
                             </p>
                           )}
+
+                          <section className="compare-section">
+                            <h4 className="compare-section-title">
+                              Compare against course repository
+                            </h4>
+                            <select
+                              className="form-input compare-section-select"
+                              value={
+                                selectedRepoByAssignment[item.assignment_run_id] ?? ''
+                              }
+                              onChange={(event) =>
+                                setSelectedRepoByAssignment((previous) => ({
+                                  ...previous,
+                                  [item.assignment_run_id]: event.target.value,
+                                }))
+                              }
+                              disabled={
+                                generatingAssignmentId === String(item.assignment_run_id)
+                              }
+                            >
+                              <option value="">Select a repository...</option>
+                              {(item.repositories || []).map((repo) => (
+                                <option
+                                  key={repo.repository_id}
+                                  value={repo.repository_id}
+                                >
+                                  {repo.repository_name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="btn-generate"
+                              onClick={() => handleGenerateResults(item)}
+                              disabled={
+                                generatingAssignmentId === String(item.assignment_run_id) ||
+                                (!(selectedRepoByAssignment[item.assignment_run_id]) &&
+                                  !item.default_repository_id)
+                              }
+                            >
+                              {generatingAssignmentId === String(item.assignment_run_id)
+                                ? 'Generating...'
+                                : 'Generate Result'}
+                            </button>
+                          </section>
                         </div>
 
                         <div className="assignment-card-right">
-                          <span className="status-visible">{item.language === 'cpp' ? 'C++' : item.language === 'java' ? 'Java' : item.language?.toUpperCase()}</span>
-                          <span className="status-hidden">
-                            Top K {item.top_k} | Threshold {item.threshold}%
-                          </span>
-                          <span
-                            className={
-                              item.has_repository ? 'statusBadge status-complete' : 'statusBadge status-queued'
-                            }
-                          >
-                            {item.has_repository
-                              ? 'Course Repository Ready'
-                              : 'Course Repository Pending'}
-                          </span>
+                          <div className="assignment-card-right-top">
+                            <span className="status-visible">{item.language === 'cpp' ? 'C++' : item.language === 'java' ? 'Java' : item.language?.toUpperCase()}</span>
+                            <span className="status-hidden">
+                              Top K {item.top_k} | Threshold {item.threshold}%
+                            </span>
+                            <span
+                              className={
+                                item.has_repository ? 'statusBadge status-complete' : 'statusBadge status-queued'
+                              }
+                            >
+                              {item.has_repository
+                                ? 'Course Repository Ready'
+                                : 'Course Repository Pending'}
+                            </span>
 
-                          <button className="btn-edit" onClick={() => openEditAssignmentForm(item)}>
-                            Edit
-                          </button>
+                            <button className="btn-edit" onClick={() => openEditAssignmentForm(item)}>
+                              Edit
+                            </button>
 
-                          <button
-                            className="btn-upload"
-                            onClick={() => openRepositoryUploadForm(item)}
-                          >
-                            Upload Course Repo
-                          </button>
+                            <button
+                              className="btn-upload"
+                              onClick={() => openRepositoryUploadForm(item)}
+                            >
+                              Upload Course Repo
+                            </button>
 
-                          <button
-                            className="btn-export"
-                            onClick={() => handleCopyKey(item.assignment_run_id)}
-                          >
-                            {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
-                          </button>
+                            <button
+                              className="btn-export"
+                              onClick={() => handleCopyKey(item.assignment_run_id)}
+                            >
+                              {copiedKeyId === item.assignment_run_id ? 'Copied!' : 'Copy Key'}
+                            </button>
+                          </div>
 
-                          <button
-                            className="btn-generate"
-                            onClick={() => handleGenerateResults(item)}
-                            disabled={
-                              generatingAssignmentId === String(item.assignment_run_id) ||
-                              !item.has_repository
-                            }
-                          >
-                            {generatingAssignmentId === String(item.assignment_run_id)
-                              ? 'Generating...'
-                              : 'Generate Result'}
-                          </button>
-
+                          <div className="assignment-card-right-bottom">
                           <button
                             className="btn-export"
                             onClick={() => handleExportAssignment(item)}
@@ -1079,6 +1156,7 @@ export default function InstructorDashboard() {
                           >
                             Delete
                           </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1197,6 +1275,18 @@ export default function InstructorDashboard() {
                 )}
 
                 <div className="form-group">
+                  <label className="form-label">Repository name</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder="e.g. Week 5 starter code"
+                    value={uploadName}
+                    onChange={(event) => setUploadName(event.target.value)}
+                    disabled={uploadLoading}
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">{UPLOAD_OPTIONS.repository.label}</label>
                   <input
                     className="form-input"
@@ -1215,7 +1305,7 @@ export default function InstructorDashboard() {
                   <button
                     className="btn-form-submit"
                     onClick={handleRepositoryUploadSubmit}
-                    disabled={uploadLoading}
+                    disabled={uploadLoading || !uploadFile || !uploadName.trim()}
                   >
                     {uploadLoading ? 'Uploading...' : 'Upload Course Repository'}
                   </button>

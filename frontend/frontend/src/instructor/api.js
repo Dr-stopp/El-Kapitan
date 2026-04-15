@@ -16,6 +16,7 @@ function ensureSupabase() {
       'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'
     )
   }
+  return supabase
 }
 
 function unique(values) {
@@ -123,7 +124,27 @@ function pickPrimaryRepository(rows = []) {
   })[0]
 }
 
-function mapAssignmentRun(row, assignmentRow, repositoryRow = null) {
+function sortRepositoriesForPicker(rows = []) {
+  return [...rows].sort((left, right) => {
+    if (Boolean(left.is_default) !== Boolean(right.is_default)) {
+      return left.is_default ? 1 : -1
+    }
+    return new Date(left.created_at || 0).getTime() - new Date(right.created_at || 0).getTime()
+  })
+}
+
+function mapAssignmentRun(row, assignmentRow, repositoryRow = null, repositoryRows = null) {
+  const allRows = Array.isArray(repositoryRows) && repositoryRows.length
+    ? repositoryRows
+    : repositoryRow
+      ? [repositoryRow]
+      : []
+  const sortedRepos = sortRepositoriesForPicker(allRows)
+  const defaultRow =
+    sortedRepos.find((r) => hasRepositoryContent(r)) ||
+    sortedRepos.find((r) => r.is_default) ||
+    null
+
   return {
     assignment_run_id: row.assignment_run_id,
     course_id: assignmentRow?.course_id ?? null,
@@ -142,6 +163,14 @@ function mapAssignmentRun(row, assignmentRow, repositoryRow = null) {
     repository_created_at: repositoryRow?.created_at ?? null,
     is_default_repository: Boolean(repositoryRow?.is_default),
     has_repository: hasRepositoryContent(repositoryRow),
+    repositories: sortedRepos.map((r) => ({
+      repository_id: r.repository_id,
+      repository_name: buildRepositoryName(r),
+      repository_path: r.repository_path ?? '',
+      is_default: Boolean(r.is_default),
+      created_at: r.created_at,
+    })),
+    default_repository_id: defaultRow?.repository_id ?? null,
   }
 }
 
@@ -280,8 +309,7 @@ function buildRepositoryLabel(submissionRow) {
 
 function buildSourceLabel(submissionRow, submissionId) {
   const studentName = mapUserName(submissionRow, submissionId)
-  const submissionReference = buildSubmissionReference(submissionRow, submissionId)
-  return studentName ? `${studentName} (${submissionReference})` : submissionReference
+  return studentName ? `${studentName} (Submission #${submissionId})` : `Submission #${submissionId}`
 }
 
 function buildRangeCsv(sections) {
@@ -422,7 +450,7 @@ function buildStorageCandidateScore(candidatePath, originalPath) {
   return score
 }
 
-async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 40) {
+async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 40, bucket = 'Submissions') {
   const normalizedPrefix = normalizeStoragePath(prefix)
   const queue = [{ prefix: normalizedPrefix, depth: 0 }]
   const discoveredFiles = []
@@ -434,7 +462,7 @@ async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 4
     if (visitedPrefixes.has(cacheKey)) continue
     visitedPrefixes.add(cacheKey)
 
-    const { data, error } = await supabase.storage.from('Submissions').list(currentPrefix, {
+    const { data, error } = await supabase.storage.from(bucket).list(currentPrefix, {
       limit: 100,
       sortBy: { column: 'name', order: 'asc' },
     })
@@ -467,15 +495,18 @@ async function listStorageFilesRecursively(prefix, depthLimit = 3, fileLimit = 4
   return discoveredFiles
 }
 
-async function downloadResolvedStorageBlob(objectPath) {
+async function downloadResolvedStorageBlob(objectPath, bucket = 'Submissions') {
   const normalizedPath = normalizeStoragePath(objectPath)
   if (!normalizedPath) {
     return { path: '', blob: null }
   }
 
-  const directDownload = await supabase.storage.from('Submissions').download(normalizedPath)
+  const directDownload = await supabase.storage.from(bucket).download(normalizedPath)
   if (!directDownload.error && directDownload.data) {
     return { path: normalizedPath, blob: directDownload.data }
+  }
+  if (directDownload.error) {
+    console.warn('[storage] direct download failed', bucket, normalizedPath, directDownload.error)
   }
 
   const candidatePrefixes = unique([
@@ -486,7 +517,7 @@ async function downloadResolvedStorageBlob(objectPath) {
   let discoveredFiles = []
 
   for (const prefix of candidatePrefixes) {
-    const listedFiles = await listStorageFilesRecursively(prefix)
+    const listedFiles = await listStorageFilesRecursively(prefix, 3, 40, bucket)
     if (listedFiles.length) {
       discoveredFiles = discoveredFiles.concat(listedFiles)
     }
@@ -503,7 +534,7 @@ async function downloadResolvedStorageBlob(objectPath) {
     return { path: normalizedPath, blob: null }
   }
 
-  const fallbackDownload = await supabase.storage.from('Submissions').download(bestPath)
+  const fallbackDownload = await supabase.storage.from(bucket).download(bestPath)
   if (fallbackDownload.error || !fallbackDownload.data) {
     return { path: bestPath, blob: null }
   }
@@ -511,33 +542,31 @@ async function downloadResolvedStorageBlob(objectPath) {
   return { path: bestPath, blob: fallbackDownload.data }
 }
 
-async function readStorageText(objectPath) {
-  if (!objectPath) return ''
-
-  const { path: resolvedPath, blob: data } = await downloadResolvedStorageBlob(objectPath)
-
-  if (!data) {
-    return ''
-  }
-
-  const normalizedPath = String(resolvedPath || objectPath || '').toLowerCase()
+async function blobToRenderableText(blob, pathHint) {
+  if (!blob) return ''
+  const normalizedPath = String(pathHint || '').toLowerCase()
 
   if (normalizedPath.endsWith('.zip') || normalizedPath.includes('.zip.')) {
     try {
-      const extractedText = await extractTextFromZipBlob(data)
-      if (extractedText) {
-        return extractedText
-      }
+      const extractedText = await extractTextFromZipBlob(blob)
+      if (extractedText) return extractedText
     } catch {
-      // Fall through to plain-text read in case the file only looks like a zip by name.
+      // fall through
     }
   }
 
-  const text = await data.text()
+  const text = await blob.text()
+  console.warn('[storage] blob text length=', text.length, 'path=', pathHint)
 
-  if (looksBinaryContent(resolvedPath || objectPath, text)) {
+  // For known source/text extensions, trust the extension and return text directly
+  // (avoids false positives in looksBinaryContent for files containing stray control chars).
+  if (hasRenderableSourceExtension(normalizedPath)) {
+    return text.replace(/\r\n/g, '\n')
+  }
+
+  if (looksBinaryContent(pathHint, text)) {
     try {
-      const extractedText = await extractTextFromZipBlob(data)
+      const extractedText = await extractTextFromZipBlob(blob)
       return extractedText || ''
     } catch {
       return ''
@@ -545,6 +574,59 @@ async function readStorageText(objectPath) {
   }
 
   return text.replace(/\r\n/g, '\n')
+}
+
+async function readStorageText(objectPath, bucket = 'Submissions') {
+  if (!objectPath) {
+    console.warn('[storage] readStorageText called with empty path')
+    return ''
+  }
+
+  const { path: resolvedPath, blob: data } = await downloadResolvedStorageBlob(objectPath, bucket)
+
+  if (data) {
+    const direct = await blobToRenderableText(data, resolvedPath || objectPath)
+    if (direct) return direct
+    console.warn('[storage] direct blob produced empty text', resolvedPath || objectPath)
+  }
+
+  // Folder fallback: enumerate every readable file under the prefix and concatenate.
+  const prefixesToTry = unique([
+    normalizeStoragePath(objectPath),
+    getParentStoragePrefix(objectPath),
+  ]).filter(Boolean)
+
+  const discovered = []
+  for (const prefix of prefixesToTry) {
+    const listed = await listStorageFilesRecursively(prefix, 3, 40, bucket)
+    if (listed.length) discovered.push(...listed)
+  }
+
+  const candidates = unique(discovered).filter(
+    (p) =>
+      hasRenderableSourceExtension(p) ||
+      p.toLowerCase().endsWith('.zip') ||
+      p.toLowerCase().includes('.zip.')
+  )
+
+  if (!candidates.length) {
+    console.warn('[storage] folder fallback found no readable files for', objectPath, 'discovered=', discovered)
+    return ''
+  }
+
+  candidates.sort((a, b) => a.localeCompare(b))
+
+  const rendered = []
+  for (const candidatePath of candidates.slice(0, 12)) {
+    const { data: blob } = await supabase.storage.from(bucket).download(candidatePath)
+    if (!blob) continue
+    const text = await blobToRenderableText(blob, candidatePath)
+    if (!text) continue
+    const fileName = getFileNameFromPath(candidatePath)
+    rendered.push(candidates.length > 1 ? `// File: ${fileName}\n${text}` : text)
+  }
+
+  return rendered.join('\n\n').trim()
 }
 
 function parseStoredSections(text) {
@@ -585,10 +667,9 @@ function parseStoredSections(text) {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
+  const header = lines[0]?.toLowerCase() ?? ''
   const dataLines =
-    lines[0]?.toLowerCase().includes('file_1_start') || lines[0]?.toLowerCase().includes('left')
-      ? lines.slice(1)
-      : lines
+    header.includes('file_1_start') || header.includes('left') ? lines.slice(1) : lines
 
   return dataLines
     .map((line, index) => {
@@ -644,9 +725,9 @@ async function loadAssignmentRunsByIds(assignmentRunIds) {
   if (error) throw error
 
   const assignmentMap = await loadAssignmentsByIds(unique((data || []).map((row) => row.assign_id)))
-  const repositoryMap = await loadRepositoriesByAssignmentRunIds(
-    unique((data || []).map((row) => row.assignment_run_id))
-  )
+  const runIds = unique((data || []).map((row) => row.assignment_run_id))
+  const repositoryMap = await loadRepositoriesByAssignmentRunIds(runIds)
+  const repositoryListMap = await loadRepositoryListsByAssignmentRunIds(runIds)
 
   return new Map(
     (data || []).map((row) => [
@@ -654,7 +735,8 @@ async function loadAssignmentRunsByIds(assignmentRunIds) {
       mapAssignmentRun(
         row,
         assignmentMap.get(String(row.assign_id)),
-        repositoryMap.get(String(row.assignment_run_id)) || null
+        repositoryMap.get(String(row.assignment_run_id)) || null,
+        repositoryListMap.get(String(row.assignment_run_id)) || []
       ),
     ])
   )
@@ -708,6 +790,26 @@ async function loadAllRepositoriesByAssignmentRunIds(assignmentRunIds) {
   if (error) throw error
 
   return new Map((data || []).map((row) => [String(row.repository_id), row]))
+}
+
+async function loadRepositoryListsByAssignmentRunIds(assignmentRunIds) {
+  if (!assignmentRunIds.length) return new Map()
+
+  const { data, error } = await supabase
+    .from('repositories')
+    .select(
+      'repository_id, assignment_run_id, repository_path, repository_name, is_default, created_at'
+    )
+    .in('assignment_run_id', assignmentRunIds)
+
+  if (error) throw error
+
+  return (data || []).reduce((accumulator, row) => {
+    const key = String(row.assignment_run_id)
+    if (!accumulator.has(key)) accumulator.set(key, [])
+    accumulator.get(key).push(row)
+    return accumulator
+  }, new Map())
 }
 
 async function createDefaultRepositoryRecord(assignmentRunId) {
@@ -859,7 +961,7 @@ async function loadComparisonSections(resultRow) {
     return directSections
   }
 
-  return parseStoredSections(await readStorageText(resultRow.result_path))
+  return parseStoredSections(await readStorageText(resultRow.result_path, 'Results'))
 }
 
 async function removeSubmissionStorageObjects(storagePaths) {
@@ -956,7 +1058,7 @@ async function deleteAssignmentRunGraph(assignmentRunIds, options = {}) {
   if (repositoryIds.length) {
     const { data, error: submissionsLookupError } = await supabase
       .from('submissions')
-      .select('submission_id, repository_id, folder_path')
+      .select('submission_id, folder_path')
       .in('repository_id', repositoryIds)
 
     if (submissionsLookupError) throw submissionsLookupError
@@ -971,11 +1073,11 @@ async function deleteAssignmentRunGraph(assignmentRunIds, options = {}) {
     ...comparisonPaths,
   ])
 
-  if (repositoryIds.length) {
+  if (submissionIds.length) {
     const { error: submissionsDeleteError } = await supabase
       .from('submissions')
       .delete()
-      .in('repository_id', repositoryIds)
+      .in('submission_id', submissionIds)
 
     if (submissionsDeleteError) throw submissionsDeleteError
   }
@@ -1098,15 +1200,16 @@ export async function fetchInstructorAssignments(courseId) {
 
   if (runsError) throw runsError
 
-  const repositoryMap = await loadRepositoriesByAssignmentRunIds(
-    unique((runRows || []).map((row) => row.assignment_run_id))
-  )
+  const runIds = unique((runRows || []).map((row) => row.assignment_run_id))
+  const repositoryMap = await loadRepositoriesByAssignmentRunIds(runIds)
+  const repositoryListMap = await loadRepositoryListsByAssignmentRunIds(runIds)
 
   return (runRows || []).map((row) =>
     mapAssignmentRun(
       row,
       assignmentMap.get(String(row.assign_id)),
-      repositoryMap.get(String(row.assignment_run_id)) || null
+      repositoryMap.get(String(row.assignment_run_id)) || null,
+      repositoryListMap.get(String(row.assignment_run_id)) || []
     )
   )
 }
@@ -1711,76 +1814,40 @@ export async function buildAssignmentExportZip(assignment) {
   const { submissions, resultsMap } = await fetchExportData(assignment.assignment_run_id)
 
   const zip = new JSZip()
-  const submissionsFolder = zip.folder('submissions')
-
-  // Group submissions by student folder name, handling duplicates
-  const folderCounts = new Map()
-  const submissionEntries = submissions.map((submission) => {
-    let folderName = buildStudentFolderName(submission) || `submission_${submission.submission_id}`
-    const count = folderCounts.get(folderName) || 0
-    folderCounts.set(folderName, count + 1)
-    if (count > 0) {
-      folderName = `${folderName}_${submission.submission_id}`
-    }
-    return { submission, folderName }
-  })
 
   // Download all submission files in batches of 5
   const blobs = await batchProcess(
-    submissionEntries,
+    submissions,
     5,
-    async (entry) => downloadStorageBlob(entry.submission.folder_path)
+    async (submission) => downloadStorageBlob(submission.folder_path)
   )
 
-  // Build zip contents for each submission
+  // Build a ZIP per student submission + collect CSV rows
   const csvRows = []
 
-  for (let i = 0; i < submissionEntries.length; i++) {
-    const { submission, folderName } = submissionEntries[i]
-    const studentFolder = submissionsFolder.folder(folderName)
+  for (let i = 0; i < submissions.length; i++) {
+    const submission = submissions[i]
     const blobResult = blobs[i]
 
-    // Add submission file or error note
+    // Create an inner ZIP for this submission, named by submission_id
     if (blobResult.status === 'fulfilled' && blobResult.value) {
+      const innerZip = new JSZip()
       const fileName = getFileNameFromPath(submission.folder_path)
-      studentFolder.file(fileName, blobResult.value)
-    } else {
-      studentFolder.file(
-        'download_error.txt',
-        'The submitted file could not be retrieved from storage.'
-      )
+      innerZip.file(fileName, blobResult.value)
+      const innerBlob = await innerZip.generateAsync({ type: 'blob' })
+      zip.file(`${submission.submission_id}.zip`, innerBlob)
     }
-
-    // Build plagiarism result JSON
-    const submissionResults = resultsMap.get(String(submission.submission_id)) || []
-    const studentName = mapUserName(submission, submission.submission_id)
-
-    const plagiarismResult = {
-      submission_id: submission.submission_id,
-      public_id: getSubmissionPublicId(submission),
-      submission_reference: buildSubmissionReference(submission, submission.submission_id),
-      student: studentName,
-      submitted_at: submission.created_at,
-      results: submissionResults.map((result) => ({
-        pair_id: result.pair_id,
-        compared_with: result.submission_2,
-        score: Number(result.score || 0),
-        date: result.date_created,
-      })),
-    }
-
-    studentFolder.file('plagiarism_result.json', JSON.stringify(plagiarismResult, null, 2))
 
     // Collect CSV row
+    const submissionResults = resultsMap.get(String(submission.submission_id)) || []
+    const studentName = mapUserName(submission, submission.submission_id)
     const bestResult = submissionResults.length
       ? submissionResults.reduce((best, r) => (Number(r.score || 0) > Number(best.score || 0) ? r : best), submissionResults[0])
       : null
 
     csvRows.push([
       studentName,
-      folderName,
       submission.submission_id,
-      getSubmissionPublicId(submission),
       submission.created_at,
       bestResult ? Number(bestResult.score || 0) : '',
       bestResult ? bestResult.submission_2 : '',
@@ -1788,15 +1855,8 @@ export async function buildAssignmentExportZip(assignment) {
     ])
   }
 
-  // Add previous_offerings placeholder
-  const prevFolder = zip.folder('previous_offerings')
-  prevFolder.file(
-    'README.txt',
-    'Previous Offerings\n\nThis folder is reserved for submissions from prior course offerings.\nThis feature is not yet available. When enabled, archived submissions\nused for cross-offering comparison will appear here.\n'
-  )
-
   // Build summary.csv
-  const csvHeader = 'student_name,student_folder,submission_id,public_id,submitted_at,highest_score,matched_submission_id,file_name'
+  const csvHeader = 'student_name,submission_id,submitted_at,highest_score,matched_submission_id,file_name'
   const csvBody = csvRows
     .map((row) => row.map(escapeCsvField).join(','))
     .join('\n')
@@ -1810,7 +1870,7 @@ export async function buildAssignmentExportZip(assignment) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${safeName}-export.zip`
+  link.download = `${safeName}.zip`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

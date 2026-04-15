@@ -69,7 +69,7 @@ export function compactOpaqueIdentifier(value = '', startLength = 12, endLength 
     return normalized
   }
 
-  return `${normalized.slice(0, startLength)}…${normalized.slice(-endLength)}`
+  return `${normalized.slice(0, startLength)}...${normalized.slice(-endLength)}`
 }
 
 export function getDisplayStudentName(studentName, fallbackId) {
