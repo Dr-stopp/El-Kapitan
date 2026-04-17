@@ -80,7 +80,7 @@ public class zipProcessor {
             char[] buffer = new char[8192];
 
             while ((entry = zis.getNextEntry()) != null) {
-                if (!entry.isDirectory()) {
+                if (!entry.isDirectory() && !isInternalArchivePath(entry.getName())) {
                     String ext = getExtension(entry.getName());
                     if (targetExt.equalsIgnoreCase(ext)) {
                         writer.write("//===== BEGIN FILE: " + entry.getName() + " =====");
@@ -108,7 +108,7 @@ public class zipProcessor {
     private static String findFirstFileExtension(ZipInputStream zis) throws IOException {
         ZipEntry entry;
         while ((entry = zis.getNextEntry()) != null) {
-            if (!entry.isDirectory()) {
+            if (!entry.isDirectory() && !isInternalArchivePath(entry.getName())) {
                 String ext = getExtension(entry.getName());
                 if (!ext.isBlank()) {
                     return ext;
