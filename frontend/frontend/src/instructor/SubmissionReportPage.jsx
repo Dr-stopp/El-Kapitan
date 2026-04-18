@@ -13,10 +13,8 @@ import { fetchSubmissionReport } from './api'
 import {
   formatAnalysisStateLabel, // turns raw state into a user-friendly label
   getDisplayStudentName,    // decides how student name should appear
-  getInitialPrivacyMode,    // gets saved privacy mode when page first loads
   getSimilarityBand,        // converts similarity score into a risk band
   normalizeAnalysisState,   // standardizes analysis state values
-  persistPrivacyMode,       // saves privacy mode
 } from './utils'
 
 export default function SubmissionReportPage() {
@@ -43,17 +41,6 @@ export default function SubmissionReportPage() {
 
   // Stores any error message if the API call fails
   const [error, setError] = useState('')
-
-  // Stores privacy mode: masked or revealed
-  const [privacyMode, setPrivacyMode] = useState(getInitialPrivacyMode)
-
-  /*
-    Whenever privacyMode changes,
-    save it so the setting is remembered
-  */
-  useEffect(() => {
-    persistPrivacyMode(privacyMode)
-  }, [privacyMode])
 
   /*
     Fetch report data when page loads
@@ -98,13 +85,14 @@ export default function SubmissionReportPage() {
   // Makes sure analysis state is in a clean expected format
   const analysisState = normalizeAnalysisState(report?.analysisState)
 
-  /*
-    Student name may be masked or revealed depending on privacy mode
-    If report is not loaded yet, use empty string
-  */
   const displayStudentName = report
-    ? getDisplayStudentName(report.studentName, report.id, privacyMode)
+    ? getDisplayStudentName(report.studentName, report.id)
     : ''
+
+  const handleOpenComparison = (pairId) => {
+    if (!report?.id || !pairId) return
+    navigate(`/compare/${report.id}?pairId=${pairId}`)
+  }
 
   /*
     UI
@@ -117,23 +105,6 @@ export default function SubmissionReportPage() {
           <h2>Submission Report</h2>
 
           <div className="teacherHeroActions">
-            {/* Privacy mode toggle */}
-            <div className="modeSwitch">
-              <button
-                className={privacyMode === 'masked' ? 'modeBtn active' : 'modeBtn'}
-                onClick={() => setPrivacyMode('masked')}
-              >
-                Masked
-              </button>
-
-              <button
-                className={privacyMode === 'revealed' ? 'modeBtn active' : 'modeBtn'}
-                onClick={() => setPrivacyMode('revealed')}
-              >
-                Reveal
-              </button>
-            </div>
-
             {/* Back button */}
             <button
               className="teacherButton teacherButtonSecondary"
@@ -163,10 +134,10 @@ export default function SubmissionReportPage() {
       {!loading && !error && report && (
         <>
           {/* Top statistics section */}
-          <div className="teacherStatGrid">
+          <div className="teacherStatGrid reportStatGrid">
             <div className="teacherStatCard">
               <p className="teacherStatLabel">Student</p>
-              <h3 className="teacherStatValue">{displayStudentName}</h3>
+              <h3 className="teacherStatValue reportLongValue">{displayStudentName}</h3>
             </div>
 
             <div className="teacherStatCard">
@@ -243,7 +214,20 @@ export default function SubmissionReportPage() {
                 ) : (
                   <div className="priorityList">
                     {report.matches.map((match, index) => (
-                      <div className="priorityItem" key={index}>
+                      <div
+                        className={`priorityItem ${match.pairId ? 'priorityItemInteractive' : ''}`}
+                        key={match.pairId || index}
+                        onClick={() => handleOpenComparison(match.pairId)}
+                        onKeyDown={(event) => {
+                          if (!match.pairId) return
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            handleOpenComparison(match.pairId)
+                          }
+                        }}
+                        role={match.pairId ? 'button' : undefined}
+                        tabIndex={match.pairId ? 0 : undefined}
+                      >
                         <div>
                           {/* Source that matched */}
                           <p className="priorityTitle">{match.sourceLabel}</p>
@@ -252,20 +236,17 @@ export default function SubmissionReportPage() {
                           <p className="priorityMeta">{match.reason}</p>
                         </div>
 
-                        <div className="priorityActions">
-                          {/* Match score */}
-                          <div className="priorityScore">{match.score}%</div>
-
-                          {/* Compare button */}
+                        <div className="priorityActionGroup">
                           <button
-                            className="teacherButton teacherButtonSecondary teacherButtonSmall"
-                            onClick={() =>
-                              navigate(
-                                `/compare/${submissionId}?pairId=${match.pairId}`
-                              )
-                            }
+                            type="button"
+                            className="priorityScoreButton"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleOpenComparison(match.pairId)
+                            }}
                           >
-                            Compare
+                            <span className="priorityScore">{match.score}%</span>
+                            <span className="priorityScoreHint">Compare</span>
                           </button>
                         </div>
                       </div>
@@ -286,12 +267,19 @@ export default function SubmissionReportPage() {
                 <div className="detailsStack">
                   <div className="detailRow">
                     <span>Submission ID</span>
+                    <strong className="detailValueBreak">
+                      {report.publicId || report.submissionLabel || report.id}
+                    </strong>
+                  </div>
+
+                  <div className="detailRow">
+                    <span>Internal Record</span>
                     <strong>{report.id}</strong>
                   </div>
 
                   <div className="detailRow">
                     <span>Student Label</span>
-                    <strong>{displayStudentName}</strong>
+                    <strong className="detailValueBreak">{displayStudentName}</strong>
                   </div>
 
                   <div className="detailRow">

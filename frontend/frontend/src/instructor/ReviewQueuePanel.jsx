@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  compactOpaqueIdentifier,
   formatAnalysisStateLabel,
   getDisplayStudentName,
   normalizeAnalysisState,
@@ -8,11 +9,10 @@ import {
 
 export default function ReviewQueuePanel({
   selectedCourse,
-  assignments,
   submissions,
   loading,
   error,
-  privacyMode,
+  selectedAssignmentRunId,
 }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
@@ -21,33 +21,34 @@ export default function ReviewQueuePanel({
   const [selectedId, setSelectedId] = useState(null)
   const navigate = useNavigate()
 
-  const availableAssignmentNames = useMemo(
-    () => assignments.map((item) => item.name),
-    [assignments]
-  )
-
-  const availableLanguages = useMemo(() => {
-    const uniqueLanguages = Array.from(
-      new Set(submissions.map((item) => item.language).filter(Boolean))
-    )
-    return uniqueLanguages.sort()
-  }, [submissions])
-
   const scopedSubmissions = useMemo(() => {
     if (!selectedCourse) return []
 
     return submissions
       .filter((item) => {
-        if (availableAssignmentNames.length === 0) return true
-        return availableAssignmentNames.includes(item.assignmentName)
+        if (!selectedAssignmentRunId || selectedAssignmentRunId === 'all') {
+          return true
+        }
+
+        return String(item.assignmentRunId || '') === String(selectedAssignmentRunId)
       })
       .map((item) => ({
         ...item,
         analysisState: normalizeAnalysisState(item.analysisState),
-        displayStudentName: getDisplayStudentName(item.studentName, item.id, privacyMode),
+        displayStudentName: getDisplayStudentName(item.studentName, item.id),
+        fullStudentName: String(item.studentName || '').trim() || `Student ${item.id}`,
+        submissionReference: item.publicId || `#${item.id}`,
+        compactSubmissionReference: compactOpaqueIdentifier(item.publicId || `#${item.id}`),
         repositoryLabel: item.repositoryLabel || 'Course Repository',
       }))
-  }, [availableAssignmentNames, privacyMode, selectedCourse, submissions])
+  }, [selectedAssignmentRunId, selectedCourse, submissions])
+
+  const availableLanguages = useMemo(() => {
+    const uniqueLanguages = Array.from(
+      new Set(scopedSubmissions.map((item) => item.language).filter(Boolean))
+    )
+    return uniqueLanguages.sort()
+  }, [scopedSubmissions])
 
   const filteredSubmissions = useMemo(() => {
     let results = [...scopedSubmissions]
@@ -164,7 +165,7 @@ export default function ReviewQueuePanel({
                 <div>
                   <h3>Filters</h3>
                   <p className="teacherSectionMeta">
-                    Narrow the queue by masked student label, language, or review status.
+                    Narrow the queue by student label, language, or review status.
                   </p>
                 </div>
               </div>
@@ -239,67 +240,66 @@ export default function ReviewQueuePanel({
                 </div>
               ) : (
                 <div className="reviewTableWrap">
-                  <table className="reviewTable">
-                    <thead>
-                      <tr>
-                        <th>Student</th>
-                        <th>Assignment</th>
-                        <th>Course Repository</th>
-                        <th>Language</th>
-                        <th>Similarity</th>
-                        <th>Analysis</th>
-                        <th>Review</th>
-                        <th>Submitted</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSubmissions.map((item) => (
-                        <tr
-                          key={item.id}
-                          className={selectedSubmission?.id === item.id ? 'reviewRowActive' : ''}
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => setSelectedId(item.id)}
-                          onDoubleClick={() => {
-                            if (normalizeAnalysisState(item.analysisState) === 'complete') {
-                              navigate(`/report/${item.id}`)
-                            }
-                          }}
-                        >
-                          <td>
-                            <div className="submissionPrimary">{item.displayStudentName}</div>
-                          </td>
-                          <td>
-                            <div className="submissionSecondary">{item.assignmentName}</div>
-                          </td>
-                          <td>{item.repositoryLabel}</td>
-                          <td>{item.language}</td>
-                          <td>
-                            <span className="similarityPill">
-                              {item.similarityScore ?? '--'}
-                              {item.similarityScore !== null && item.similarityScore !== undefined
-                                ? '%'
-                                : ''}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`statusBadge status-${normalizeAnalysisState(item.analysisState)}`}>
-                              {formatAnalysisStateLabel(item.analysisState)}
-                            </span>
-                          </td>
-                          <td>
-                            <span
-                              className={`statusBadge status-${String(item.status || 'Pending Review')
-                                .toLowerCase()
-                                .replace(/\s+/g, '-')}`}
-                            >
-                              {item.status || 'Pending Review'}
-                            </span>
-                          </td>
-                          <td>{item.submittedAt}</td>
+                    <table className="reviewTable">
+                      <thead>
+                        <tr>
+                          <th>Student</th>
+                          <th>Assignment</th>
+                          <th>Course Repository</th>
+                          <th>Language</th>
+                          <th>Similarity</th>
+                          <th>Analysis</th>
+                          <th>Review</th>
+                          <th>Submitted</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredSubmissions.map((item) => (
+                          <tr
+                            key={item.id}
+                            className={selectedSubmission?.id === item.id ? 'reviewRowActive' : ''}
+                            onClick={() => setSelectedId(item.id)}
+                          >
+                            <td>
+                              <div
+                                className="submissionPrimary reviewLongLabel"
+                                title={item.fullStudentName}
+                              >
+                                {item.displayStudentName}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="submissionSecondary">{item.assignmentName}</div>
+                            </td>
+                            <td>{item.repositoryLabel}</td>
+                            <td>{item.language}</td>
+                            <td>
+                              <span className="similarityPill">
+                                {item.similarityScore ?? '--'}
+                                {item.similarityScore !== null && item.similarityScore !== undefined
+                                  ? '%'
+                                  : ''}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`statusBadge status-${normalizeAnalysisState(item.analysisState)}`}>
+                                {formatAnalysisStateLabel(item.analysisState)}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className={`statusBadge status-${String(item.status || 'Pending Review')
+                                  .toLowerCase()
+                                  .replace(/\s+/g, '-')}`}
+                              >
+                                {item.status || 'Pending Review'}
+                              </span>
+                            </td>
+                            <td>{item.submittedAt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                 </div>
               )}
             </div>
@@ -307,10 +307,15 @@ export default function ReviewQueuePanel({
 
           <div className="teacherSideColumn">
             <div className="teacherCard">
-              <div className="teacherSectionHeaderInline">
-                <h3>Selected Submission</h3>
-                <span className="teacherSectionMeta">
-                  {selectedSubmission ? `#${selectedSubmission.id}` : 'None'}
+                <div className="teacherSectionHeaderInline">
+                  <h3>Selected Submission</h3>
+                  <span
+                    className="teacherSectionMeta selectedSubmissionMeta"
+                    title={selectedSubmission?.submissionReference || ''}
+                  >
+                  {selectedSubmission
+                    ? selectedSubmission.compactSubmissionReference
+                    : 'None'}
                 </span>
               </div>
 
@@ -319,8 +324,22 @@ export default function ReviewQueuePanel({
               ) : (
                 <div className="detailsStack">
                   <div className="detailRow">
+                    <span>Submission ID</span>
+                    <strong
+                      className="detailValueBreak"
+                      title={selectedSubmission.submissionReference}
+                    >
+                      {selectedSubmission.submissionReference}
+                    </strong>
+                  </div>
+                  <div className="detailRow">
                     <span>Student</span>
-                    <strong>{selectedSubmission.displayStudentName}</strong>
+                    <strong
+                      className="detailValueBreak"
+                      title={selectedSubmission.fullStudentName}
+                    >
+                      {selectedSubmission.displayStudentName}
+                    </strong>
                   </div>
                   <div className="detailRow">
                     <span>Assignment</span>

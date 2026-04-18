@@ -4,7 +4,11 @@ import {
   getMockSubmissionReport,
 } from './mockData'
 import JSZip from 'jszip'
-import { DEFAULT_REPOSITORY_LABEL, formatShortTimestamp } from './utils'
+import {
+  DEFAULT_REPOSITORY_LABEL,
+  formatShortTimestamp,
+  parseStructuredSourceFiles,
+} from './utils'
 
 function ensureSupabase() {
   if (!supabase) {
@@ -41,8 +45,20 @@ function buildDataAccessError(error, fallbackMessage) {
   return new Error(parts.join(' ').trim())
 }
 
+function getSubmissionPublicId(submissionRow) {
+  return String(submissionRow?.public_id || '').trim()
+}
+
+function buildSubmissionReference(submissionRow, fallbackId) {
+  return getSubmissionPublicId(submissionRow) || `Submission #${fallbackId}`
+}
+
 function mapUserName(submissionRow, fallbackId) {
-  return parseStudentNameFromFolderPath(submissionRow?.folder_path) || `Student ${fallbackId}`
+  return (
+    parseStudentNameFromFolderPath(submissionRow?.folder_path) ||
+    getSubmissionPublicId(submissionRow) ||
+    `Student ${fallbackId}`
+  )
 }
 
 function getReviewStatus(score) {
@@ -65,6 +81,15 @@ function buildRepositoryName(repositoryRow) {
     .pop()
 
   return pathName || DEFAULT_REPOSITORY_LABEL
+}
+
+function buildRepositoryOption(repositoryRow) {
+  return {
+    repositoryId: String(repositoryRow?.repository_id || ''),
+    repositoryName: buildRepositoryName(repositoryRow),
+    repositoryPath: String(repositoryRow?.repository_path || '').trim(),
+    isDefault: Boolean(repositoryRow?.is_default),
+  }
 }
 
 function hasRepositoryContent(repositoryRow) {
@@ -115,7 +140,10 @@ function mapAssignmentRun(row, assignmentRow, repositoryRow = null, repositoryRo
       ? [repositoryRow]
       : []
   const sortedRepos = sortRepositoriesForPicker(allRows)
-  const defaultRow = sortedRepos.find((r) => r.is_default) || null
+  const defaultRow =
+    sortedRepos.find((r) => hasRepositoryContent(r)) ||
+    sortedRepos.find((r) => r.is_default) ||
+    null
 
   return {
     assignment_run_id: row.assignment_run_id,
@@ -137,7 +165,8 @@ function mapAssignmentRun(row, assignmentRow, repositoryRow = null, repositoryRo
     has_repository: hasRepositoryContent(repositoryRow),
     repositories: sortedRepos.map((r) => ({
       repository_id: r.repository_id,
-      repository_name: r.repository_name,
+      repository_name: buildRepositoryName(r),
+      repository_path: r.repository_path ?? '',
       is_default: Boolean(r.is_default),
       created_at: r.created_at,
     })),
@@ -852,7 +881,7 @@ async function loadCourseSubmissionDataset(courseId) {
 
   const { data: submissionRows, error: submissionsError } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, folder_path')
+    .select('submission_id, public_id, created_at, repository_id, folder_path')
     .in('repository_id', repositoryIds)
     .order('created_at', { ascending: false })
 
@@ -871,7 +900,7 @@ async function loadSubmissionsByIds(submissionIds) {
 
   const { data, error } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, folder_path')
+    .select('submission_id, public_id, created_at, repository_id, folder_path')
     .in('submission_id', submissionIds)
 
   if (error) throw error
@@ -1395,7 +1424,10 @@ export async function fetchReviewQueue(courseId) {
 
         return {
           id: submission.submission_id,
+          publicId: getSubmissionPublicId(submission),
+          submissionLabel: buildSubmissionReference(submission, submission.submission_id),
           studentName: mapUserName(submission, submission.submission_id),
+          assignmentRunId: String(repository?.assignment_run_id || ''),
           assignmentName: assignment?.name || `Assignment #${repository?.assignment_run_id || submission.repository_id}`,
           language: assignment?.language || 'Unknown',
           similarityScore,
@@ -1447,6 +1479,8 @@ export async function fetchAnalytics(courseId) {
 
       return {
         id: submission.submission_id,
+        publicId: getSubmissionPublicId(submission),
+        submissionLabel: buildSubmissionReference(submission, submission.submission_id),
         language: assignment?.language || 'Unknown',
         similarityScore,
         status: getReviewStatus(similarityScore),
@@ -1524,6 +1558,8 @@ export async function fetchSubmissionReport(submissionId) {
 
     return {
       id: submission.submission_id,
+      publicId: getSubmissionPublicId(submission),
+      submissionLabel: buildSubmissionReference(submission, submission.submission_id),
       studentName: mapUserName(submission, submission.submission_id),
       assignmentName: assignment?.name || fallbackAssignmentName,
       language: assignment?.language || 'Unknown',
@@ -1545,6 +1581,7 @@ export async function fetchSubmissionReport(submissionId) {
         return {
           pairId: resultRow.pair_id,
           sourceSubmissionId,
+          sourcePublicId: getSubmissionPublicId(sourceSubmission),
           sourceLabel,
           score: Number(resultRow.score || 0),
           reason: `Stored result pair ${resultRow.pair_id} reports ${Number(
@@ -1559,9 +1596,10 @@ export async function fetchSubmissionReport(submissionId) {
   }
 }
 
-export async function fetchSubmissionComparison(submissionId, { pairId } = {}) {
+export async function fetchSubmissionComparison(submissionId, options = {}) {
   try {
     ensureSupabase()
+    const requestedPairId = String(options?.pairId || '').trim()
 
     const submissionMap = await loadSubmissionsByIds([submissionId])
     const submission = submissionMap.get(String(submissionId))
@@ -1570,17 +1608,42 @@ export async function fetchSubmissionComparison(submissionId, { pairId } = {}) {
       throw new Error('Submission not found.')
     }
 
+    const repositoriesMap = await loadRepositoriesByIds([submission.repository_id])
+    const repository = repositoriesMap.get(String(submission.repository_id))
+    const assignmentRunId = repository?.assignment_run_id || null
+    const repositoryOptionRows = Array.from(
+      (
+        await loadAllRepositoriesByAssignmentRunIds(assignmentRunId ? [assignmentRunId] : [])
+      ).values()
+    )
+      .filter((row) => hasRepositoryContent(row))
+      .sort((left, right) => {
+        if (Boolean(left.is_default) !== Boolean(right.is_default)) {
+          return left.is_default ? -1 : 1
+        }
+
+        return new Date(left.created_at || 0).getTime() - new Date(right.created_at || 0).getTime()
+      })
+    const defaultRepositoryOption =
+      pickPrimaryRepository(repositoryOptionRows) || repositoryOptionRows[0] || null
+    const repositoryOptions = repositoryOptionRows.map(buildRepositoryOption)
+
     const resultsMap = await loadResultsBySubmissionIds([submissionId])
-    const allResults = resultsMap.get(String(submissionId)) || []
-    const bestResult = pairId
-      ? allResults.find((r) => String(r.pair_id) === String(pairId)) || pickBestResult(allResults)
-      : pickBestResult(allResults)
+    const candidateResults = resultsMap.get(String(submissionId)) || []
+    const bestResult =
+      candidateResults.find((row) => String(row.pair_id || '') === requestedPairId) ||
+      pickBestResult(candidateResults)
 
     if (!bestResult) {
       return {
         id: submission.submission_id,
+        publicId: getSubmissionPublicId(submission),
+        assignmentRunId,
+        repositoryOptions,
+        defaultRepositoryId: String(defaultRepositoryOption?.repository_id || ''),
         pairId: null,
         sourceLabel: 'No stored comparison match',
+        sourcePublicId: '',
         similarityScore: null,
         analysisState: 'queued',
         leftText: '',
@@ -1619,8 +1682,13 @@ export async function fetchSubmissionComparison(submissionId, { pairId } = {}) {
 
     return {
       id: submission.submission_id,
+      publicId: getSubmissionPublicId(submission),
+      assignmentRunId,
+      repositoryOptions,
+      defaultRepositoryId: String(defaultRepositoryOption?.repository_id || ''),
       pairId: bestResult.pair_id,
       sourceLabel,
+      sourcePublicId: getSubmissionPublicId(sourceSubmission),
       similarityScore: Number(bestResult.score || 0),
       analysisState: 'complete',
       leftText: leftText || buildPlaceholderCode('Current submission', sections, 'left'),
@@ -1635,6 +1703,33 @@ export async function fetchSubmissionComparison(submissionId, { pairId } = {}) {
   } catch (error) {
     console.warn('Falling back to demo submission comparison.', error)
     return getMockSubmissionComparison(submissionId)
+  }
+}
+
+export async function fetchRepositoryComparisonSource(repositoryId) {
+  try {
+    ensureSupabase()
+
+    const repositoriesMap = await loadRepositoriesByIds([repositoryId])
+    const repository = repositoriesMap.get(String(repositoryId))
+
+    if (!repository) {
+      throw new Error('Repository not found.')
+    }
+
+    const repositoryName = buildRepositoryName(repository)
+    const rawText = await readStorageText(repository.repository_path)
+
+    return {
+      repositoryId: String(repository.repository_id),
+      repositoryName,
+      repositoryPath: String(repository.repository_path || '').trim(),
+      rawText,
+      files: parseStructuredSourceFiles(rawText, repositoryName),
+    }
+  } catch (error) {
+    console.error('Failed to load repository source for comparison.', error)
+    throw buildDataAccessError(error, 'Failed to load repository source for comparison.')
   }
 }
 
@@ -1663,7 +1758,7 @@ async function fetchExportData(assignmentRunId) {
 
   const { data: submissionRows, error: submissionsError } = await supabase
     .from('submissions')
-    .select('submission_id, created_at, repository_id, folder_path')
+    .select('submission_id, public_id, created_at, repository_id, folder_path')
     .in('repository_id', repositoryIds)
     .order('created_at', { ascending: true })
 
@@ -1678,6 +1773,11 @@ async function fetchExportData(assignmentRunId) {
 }
 
 function buildStudentFolderName(submissionRow) {
+  const publicId = getSubmissionPublicId(submissionRow)
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .trim()
+  if (publicId) return publicId
+
   const fileName = String(submissionRow?.folder_path || '').split('/').filter(Boolean).pop()
   if (!fileName) return null
 

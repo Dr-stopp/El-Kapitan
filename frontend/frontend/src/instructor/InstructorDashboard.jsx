@@ -24,8 +24,6 @@ import ReviewQueuePanel from './ReviewQueuePanel'
 import {
   formatDueDate,
   formatShortTimestamp,
-  getInitialPrivacyMode,
-  persistPrivacyMode,
 } from './utils'
 
 function sortAssignments(assignments) {
@@ -89,6 +87,7 @@ export default function InstructorDashboard() {
   const [exportingAssignmentId, setExportingAssignmentId] = useState(null)
   const [generatingAssignmentId, setGeneratingAssignmentId] = useState('')
   const [selectedRepoByAssignment, setSelectedRepoByAssignment] = useState({})
+  const [selectedReviewAssignmentRunId, setSelectedReviewAssignmentRunId] = useState('all')
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get('tab')
     return VALID_TABS.has(tabParam) ? tabParam : 'assignments'
@@ -103,11 +102,6 @@ export default function InstructorDashboard() {
   })
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsError, setAnalyticsError] = useState('')
-  const [privacyMode, setPrivacyMode] = useState(getInitialPrivacyMode)
-
-  useEffect(() => {
-    persistPrivacyMode(privacyMode)
-  }, [privacyMode])
 
   useEffect(() => {
     let ignore = false
@@ -180,6 +174,25 @@ export default function InstructorDashboard() {
       ignore = true
     }
   }, [selectedCourse])
+
+  useEffect(() => {
+    if (!selectedCourse) {
+      setSelectedReviewAssignmentRunId('all')
+      return
+    }
+
+    setSelectedReviewAssignmentRunId((current) => {
+      if (current === 'all') {
+        return current
+      }
+
+      const stillExists = assignments.some(
+        (item) => String(item.assignment_run_id) === String(current)
+      )
+
+      return stillExists ? current : 'all'
+    })
+  }, [assignments, selectedCourse])
 
   useEffect(() => {
     if (!selectedCourse) return
@@ -257,6 +270,7 @@ export default function InstructorDashboard() {
     setAnalyticsLoading(Boolean(course))
     setSubmissionsError('')
     setAnalyticsError('')
+    setSelectedReviewAssignmentRunId('all')
 
     if (!course) {
       setAssignments([])
@@ -342,6 +356,10 @@ export default function InstructorDashboard() {
     const nextCourse =
       courses.find((course) => String(course.course_id) === event.target.value) ?? null
     handleCourseSelection(nextCourse)
+  }
+
+  const handleReviewAssignmentSelectChange = (event) => {
+    setSelectedReviewAssignmentRunId(event.target.value || 'all')
   }
 
   const handleCourseFormSubmit = async () => {
@@ -789,24 +807,28 @@ export default function InstructorDashboard() {
                 </option>
               ))}
             </select>
-          </div>
 
-          <div className="toolbarField">
-            <label>Privacy Mode</label>
-            <div className="modeSwitch">
-              <button
-                className={privacyMode === 'masked' ? 'modeBtn active' : 'modeBtn'}
-                onClick={() => setPrivacyMode('masked')}
-              >
-                Masked
-              </button>
-              <button
-                className={privacyMode === 'revealed' ? 'modeBtn active' : 'modeBtn'}
-                onClick={() => setPrivacyMode('revealed')}
-              >
-                Reveal
-              </button>
-            </div>
+            {activeTab === 'review' && (
+              <div className="toolbarFieldStack">
+                <label>Assignment Run</label>
+                <select
+                  className="teacherSelect"
+                  value={selectedReviewAssignmentRunId}
+                  onChange={handleReviewAssignmentSelectChange}
+                  disabled={!selectedCourse || assignmentsLoading || assignments.length === 0}
+                >
+                  <option value="all">All assignment runs</option>
+                  {assignments.map((assignment) => (
+                    <option
+                      key={assignment.assignment_run_id}
+                      value={assignment.assignment_run_id}
+                    >
+                      {assignment.name} - {formatDueDate(assignment.due_date)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="toolbarField">
@@ -1056,7 +1078,7 @@ export default function InstructorDashboard() {
                                 generatingAssignmentId === String(item.assignment_run_id)
                               }
                             >
-                              <option value="">Select a repository…</option>
+                              <option value="">Select a repository...</option>
                               {(item.repositories || []).map((repo) => (
                                 <option
                                   key={repo.repository_id}
@@ -1304,11 +1326,10 @@ export default function InstructorDashboard() {
       {activeTab === 'review' && (
         <ReviewQueuePanel
           selectedCourse={selectedCourse}
-          assignments={assignments}
           submissions={submissions}
           loading={submissionsLoading}
           error={submissionsError}
-          privacyMode={privacyMode}
+          selectedAssignmentRunId={selectedReviewAssignmentRunId}
         />
       )}
 
