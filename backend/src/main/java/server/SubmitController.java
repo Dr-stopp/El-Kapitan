@@ -203,6 +203,28 @@ public class SubmitController {
         }
     }
 
+    @PostMapping(path = "/userinfo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> userInfo(
+            @RequestParam("firstName") String firstName,
+            @RequestParam("lastName") String lastName,
+            @RequestParam("email") String email
+    ) {
+        try {
+            String first = encrypter.decryptString(firstName);
+            String last = encrypter.decryptString(lastName);
+            String mail = encrypter.decryptString(email);
+
+            return ResponseEntity.ok(java.util.Map.of(
+                    "firstName", first,
+                    "lastName", last,
+                    "email", mail
+            ));
+        } catch (Exception e) {
+            log.warn("Decryption Failed");
+            return ResponseEntity.badRequest().body("Failed to decrypt user info");
+        }
+    }
+
     private void cleanupTempDirIfEmpty() {
         Path tempDir = Paths.get("temp");
         if (!Files.isDirectory(tempDir)) {
