@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   fetchRepositoryComparisonSource,
   fetchSubmissionComparison,
+  fetchSubmissionComparisonSource,
 } from './api'
 import {
   buildComparisonViewModel,
@@ -49,19 +50,52 @@ const MATCH_PALETTE = [
   'rgba(128, 203, 196, 0.35)',
 ]
 
+const MATCH_BORDER_PALETTE = [
+  '#2b6fa3',
+  '#2e7d32',
+  '#c77700',
+  '#7b3fa0',
+  '#b73765',
+  '#00838f',
+  '#b28704',
+  '#6d4c41',
+  '#4657a6',
+  '#558b2f',
+  '#c33f33',
+  '#00796b',
+]
+
+const EMPTY_SECTIONS = []
 
 function findBlockIndex(lineNumber, matchedBlocks, side) {
+  const candidates = []
+
   for (let index = 0; index < matchedBlocks.length; index += 1) {
     const block = matchedBlocks[index]
-    if (
-      lineNumber >= Number(block[`${side}StartLine`] || 1) &&
-      lineNumber <= Number(block[`${side}EndLine`] || 1)
-    ) {
-      return index
+    const startLine = Number(block[`${side}StartLine`] || 1)
+    const endLine = Number(block[`${side}EndLine`] || 1)
+
+    if (lineNumber >= startLine && lineNumber <= endLine) {
+      candidates.push({
+        index,
+        span: Math.max(0, endLine - startLine),
+      })
     }
   }
 
-  return -1
+  return candidates.sort((left, right) => left.span - right.span || left.index - right.index)[0]
+    ?.index ?? -1
+}
+
+function getMatchLineStyle(blockIndex) {
+  if (blockIndex < 0) {
+    return undefined
+  }
+
+  return {
+    '--match-bg': MATCH_PALETTE[blockIndex % MATCH_PALETTE.length],
+    '--match-border': MATCH_BORDER_PALETTE[blockIndex % MATCH_BORDER_PALETTE.length],
+  }
 }
 
 function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, contextLines = 2) {
@@ -163,13 +197,21 @@ function buildRenderedRows(lines, matchedBlocks, viewMode, activeIndex, side, co
 }
 
 function scrollPaneToLine(paneRef, lineNumber) {
-  if (!paneRef.current || !lineNumber) return
+  const pane = paneRef.current
+  if (!pane || !lineNumber) return
 
-  const lineElement = paneRef.current.querySelector(`[data-line-number="${lineNumber}"]`)
+  const lineElement = pane.querySelector(`[data-line-number="${lineNumber}"]`)
   if (!lineElement) return
 
-  lineElement.scrollIntoView({
-    block: 'center',
+  const paneRect = pane.getBoundingClientRect()
+  const lineRect = lineElement.getBoundingClientRect()
+  const lineCenterFromPaneTop = lineRect.top - paneRect.top + lineRect.height / 2
+  const nextScrollTop = pane.scrollTop + lineCenterFromPaneTop - pane.clientHeight / 2
+
+  pane.scrollTo({
+    top: Math.max(0, nextScrollTop),
+    left: pane.scrollLeft,
+    behavior: 'auto',
   })
 }
 
@@ -227,10 +269,12 @@ export default function SubmissionComparePage() {
   const [activeBlockIndex, setActiveBlockIndex] = useState(0)
   const [hoveredBlockIndex, setHoveredBlockIndex] = useState(-1)
   const [selectedLeftFileId, setSelectedLeftFileId] = useState('')
-  const [selectedRightRepositoryId, setSelectedRightRepositoryId] = useState('')
+  const [selectedRightSourceId, setSelectedRightSourceId] = useState('')
   const [selectedRightFileId, setSelectedRightFileId] = useState('')
   const [repositorySourcesById, setRepositorySourcesById] = useState({})
   const [repositorySourceErrorsById, setRepositorySourceErrorsById] = useState({})
+  const [submissionSourcesById, setSubmissionSourcesById] = useState({})
+  const [submissionSourceErrorsById, setSubmissionSourceErrorsById] = useState({})
 
   const leftPaneRef = useRef(null)
   const rightPaneRef = useRef(null)
@@ -244,7 +288,7 @@ export default function SubmissionComparePage() {
         if (!ignore) {
           setComparison(data)
           setSelectedLeftFileId('')
-          setSelectedRightRepositoryId('')
+          setSelectedRightSourceId('')
           setSelectedRightFileId('')
           setActiveBlockIndex(0)
           setHoveredBlockIndex(-1)
@@ -276,6 +320,7 @@ export default function SubmissionComparePage() {
     [comparison?.id, comparison?.leftText, submissionId]
   )
   const repositoryOptions = comparison?.repositoryOptions || []
+  const submissionSourceOptions = comparison?.submissionSourceOptions || []
   const matchedSourceFiles = useMemo(
     () =>
       parseStructuredSourceFiles(
@@ -284,21 +329,57 @@ export default function SubmissionComparePage() {
       ),
     [comparison?.rightText, comparison?.sourceLabel]
   )
-  const hasRepositoryChoices = repositoryOptions.length > 0
+  const rightSourceOptions = useMemo(
+    () => [
+      ...submissionSourceOptions.map((option) => ({
+        optionId: option.sourceId,
+        optionType: 'submission',
+        label: option.sourceName,
+        submissionId: option.submissionId,
+        isMatchedSource: Boolean(option.isMatchedSource),
+      })),
+      ...repositoryOptions.map((option) => ({
+        optionId: `repository:${option.repositoryId}`,
+        optionType: 'repository',
+        label: option.repositoryName,
+        repositoryId: option.repositoryId,
+      })),
+    ],
+    [repositoryOptions, submissionSourceOptions]
+  )
+  const hasRightSourceChoices = rightSourceOptions.length > 0
   const effectiveLeftFileId = leftFiles.some((file) => file.id === selectedLeftFileId)
     ? selectedLeftFileId
     : leftFiles[0]?.id || ''
-  const effectiveRightRepositoryId = repositoryOptions.some(
-    (option) => option.repositoryId === selectedRightRepositoryId
+  const defaultRightSourceId =
+    comparison?.defaultSourceOptionId ||
+    rightSourceOptions[0]?.optionId ||
+    (comparison?.defaultRepositoryId ? `repository:${comparison.defaultRepositoryId}` : '')
+  const effectiveRightSourceId = rightSourceOptions.some(
+    (option) => option.optionId === selectedRightSourceId
   )
-    ? selectedRightRepositoryId
-    : String(comparison?.defaultRepositoryId || repositoryOptions[0]?.repositoryId || '')
+    ? selectedRightSourceId
+    : defaultRightSourceId
+  const selectedRightSourceOption =
+    rightSourceOptions.find((option) => option.optionId === effectiveRightSourceId) || null
+  const effectiveRightRepositoryId =
+    selectedRightSourceOption?.optionType === 'repository'
+      ? selectedRightSourceOption.repositoryId
+      : ''
+  const effectiveRightSubmissionId =
+    selectedRightSourceOption?.optionType === 'submission'
+      ? selectedRightSourceOption.submissionId
+      : ''
+  const isMatchedSubmissionSource = Boolean(
+    effectiveRightSubmissionId &&
+      String(effectiveRightSubmissionId) === String(comparison?.sourceSubmissionId || '')
+  )
 
   useEffect(() => {
     let ignore = false
 
     if (
-      !hasRepositoryChoices ||
+      selectedRightSourceOption?.optionType !== 'repository' ||
       !effectiveRightRepositoryId ||
       repositorySourcesById[effectiveRightRepositoryId] ||
       repositorySourceErrorsById[effectiveRightRepositoryId]
@@ -328,19 +409,78 @@ export default function SubmissionComparePage() {
       ignore = true
     }
   }, [
-    hasRepositoryChoices,
     effectiveRightRepositoryId,
     repositorySourceErrorsById,
     repositorySourcesById,
+    selectedRightSourceOption?.optionType,
+  ])
+
+  useEffect(() => {
+    let ignore = false
+
+    if (
+      selectedRightSourceOption?.optionType !== 'submission' ||
+      !effectiveRightSubmissionId ||
+      isMatchedSubmissionSource ||
+      submissionSourcesById[effectiveRightSubmissionId] ||
+      submissionSourceErrorsById[effectiveRightSubmissionId]
+    ) {
+      return undefined
+    }
+
+    fetchSubmissionComparisonSource(effectiveRightSubmissionId)
+      .then((data) => {
+        if (ignore) return
+        setSubmissionSourcesById((previous) => ({
+          ...previous,
+          [data.submissionId]: data,
+        }))
+      })
+      .catch((nextError) => {
+        if (ignore) return
+        console.error(nextError)
+        setSubmissionSourceErrorsById((previous) => ({
+          ...previous,
+          [effectiveRightSubmissionId]:
+            nextError.message || 'Failed to load submission source for comparison.',
+        }))
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [
+    effectiveRightSubmissionId,
+    isMatchedSubmissionSource,
+    selectedRightSourceOption?.optionType,
+    submissionSourceErrorsById,
+    submissionSourcesById,
   ])
 
   const selectedLeftFile =
     leftFiles.find((file) => file.id === effectiveLeftFileId) || leftFiles[0] || null
   const repositorySource = repositorySourcesById[effectiveRightRepositoryId] || null
   const repositorySourceError = repositorySourceErrorsById[effectiveRightRepositoryId] || ''
+  const submissionSource = isMatchedSubmissionSource
+    ? {
+        submissionId: String(comparison?.sourceSubmissionId || ''),
+        sourceName: comparison?.sourceLabel || 'Matched source',
+        files: matchedSourceFiles,
+      }
+    : submissionSourcesById[effectiveRightSubmissionId] || null
+  const submissionSourceError = submissionSourceErrorsById[effectiveRightSubmissionId] || ''
+  const isInlineMatchedSource = !selectedRightSourceOption && matchedSourceFiles.length > 0
   const rightFiles = useMemo(
-    () => (hasRepositoryChoices ? repositorySource?.files || [] : matchedSourceFiles),
-    [hasRepositoryChoices, matchedSourceFiles, repositorySource]
+    () =>
+      selectedRightSourceOption?.optionType === 'repository'
+        ? repositorySource?.files || []
+        : submissionSource?.files || matchedSourceFiles,
+    [
+      matchedSourceFiles,
+      repositorySource,
+      selectedRightSourceOption?.optionType,
+      submissionSource,
+    ]
   )
   const preferredRightFileId = useMemo(() => {
     if (!rightFiles.length) return ''
@@ -373,23 +513,37 @@ export default function SubmissionComparePage() {
     comparison?.repositoryOptions?.find(
       (option) => option.repositoryId === effectiveRightRepositoryId
     ) || null
+  const isSubmissionSourceLoading = Boolean(
+    selectedRightSourceOption?.optionType === 'submission' &&
+      effectiveRightSubmissionId &&
+      !isMatchedSubmissionSource &&
+      !submissionSource &&
+      !submissionSourceError
+  )
   const isRepositorySourceLoading = Boolean(
-    hasRepositoryChoices &&
+    selectedRightSourceOption?.optionType === 'repository' &&
       effectiveRightRepositoryId &&
       !repositorySource &&
       !repositorySourceError
   )
+  const isRightSourceLoading = isRepositorySourceLoading || isSubmissionSourceLoading
+  const rightSourceError = repositorySourceError || submissionSourceError
   const leftComparisonText = selectedLeftFile?.text || ''
   const rightComparisonText = selectedRightFile?.text || ''
+  const storedSectionsForSelectedSource =
+    (isMatchedSubmissionSource || isInlineMatchedSource) &&
+    effectiveRightFileId === preferredRightFileId
+      ? comparison?.sections || []
+      : EMPTY_SECTIONS
 
   const comparisonView = useMemo(
     () =>
       buildComparisonViewModel(
         leftComparisonText,
         rightComparisonText,
-        []
+        storedSectionsForSelectedSource
       ),
-    [leftComparisonText, rightComparisonText]
+    [leftComparisonText, rightComparisonText, storedSectionsForSelectedSource]
   )
 
   const analysisState = normalizeAnalysisState(comparison?.analysisState)
@@ -401,6 +555,8 @@ export default function SubmissionComparePage() {
     ? Math.min(activeBlockIndex, matchedBlockCount - 1)
     : 0
   const activeBlock = comparisonView.matchedBlocks[effectiveActiveBlockIndex] || null
+  const activeLeftStartLine = activeBlock ? Number(activeBlock.leftStartLine || 0) : 0
+  const activeRightStartLine = activeBlock ? Number(activeBlock.rightStartLine || 0) : 0
 
   const leftFileLabel =
     selectedLeftFile?.label ||
@@ -409,16 +565,20 @@ export default function SubmissionComparePage() {
     selectedRightFile?.label ||
     extractComparisonFileLabel(
       rightComparisonText,
-      hasRepositoryChoices
+      selectedRightSourceOption?.optionType === 'repository'
         ? selectedRepositoryOption?.repositoryName || 'Repository file'
         : comparison?.sourceLabel || 'Matched source'
     )
-  const selectedRepositoryName =
-    hasRepositoryChoices
+  const selectedRightSourceName =
+    selectedRightSourceOption?.optionType === 'repository'
       ? selectedRepositoryOption?.repositoryName ||
         repositorySource?.repositoryName ||
-        'Select a repository'
-      : 'Matched Submission'
+        selectedRightSourceOption?.label ||
+        'Select a source'
+      : submissionSource?.sourceName ||
+        selectedRightSourceOption?.label ||
+        comparison?.sourceLabel ||
+        'Matched Submission'
   const submissionDisplayName = getDisplayStudentName(
     comparison?.studentName,
     comparison?.id || submissionId
@@ -460,11 +620,11 @@ export default function SubmissionComparePage() {
   )
 
   useEffect(() => {
-    if (!activeBlock) return
+    if (!activeLeftStartLine || !activeRightStartLine) return
 
-    scrollPaneToLine(leftPaneRef, activeBlock.leftStartLine)
-    scrollPaneToLine(rightPaneRef, activeBlock.rightStartLine)
-  }, [activeBlock, viewMode])
+    scrollPaneToLine(leftPaneRef, activeLeftStartLine)
+    scrollPaneToLine(rightPaneRef, activeRightStartLine)
+  }, [activeLeftStartLine, activeRightStartLine, viewMode])
 
   return (
     <div className="dashboard instructor-shell">
@@ -508,13 +668,11 @@ export default function SubmissionComparePage() {
               <p className="teacherStatNote">{submissionReference}</p>
             </div>
             <div className="teacherStatCard">
-              <p className="teacherStatLabel">
-                {hasRepositoryChoices ? 'Reference Repository' : 'Matched Source'}
-              </p>
+              <p className="teacherStatLabel">Comparison Source</p>
               <h3 className="teacherStatValue compareSourceValue compareLongValue">
-                {selectedRepositoryName}
+                {selectedRightSourceName}
               </h3>
-              <p className="teacherStatNote">{rightFileLabel || 'Choose a repository file below.'}</p>
+              <p className="teacherStatNote">{rightFileLabel || 'Choose a source file below.'}</p>
             </div>
             <div className="teacherStatCard">
               <p className="teacherStatLabel">Similarity</p>
@@ -661,14 +819,7 @@ export default function SubmissionComparePage() {
                         <div
                           key={`left-${row.line.number}`}
                           className={`codeLine${row.blockIndex >= 0 ? ' matchColored' : ''}${row.blockIndex >= 0 && (row.blockIndex === hoveredBlockIndex || row.blockIndex === effectiveActiveBlockIndex) ? ' matchEmphasis' : ''}${row.blockIndex >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
-                          style={
-                            row.blockIndex >= 0
-                              ? {
-                                  backgroundColor:
-                                    MATCH_PALETTE[row.blockIndex % MATCH_PALETTE.length],
-                                }
-                              : undefined
-                          }
+                          style={getMatchLineStyle(row.blockIndex)}
                           data-line-number={row.line.number}
                           onMouseEnter={
                             row.blockIndex >= 0
@@ -693,32 +844,54 @@ export default function SubmissionComparePage() {
               <div className="teacherCard comparePaneCard">
                 <div className="comparePaneHeader">
                   <div className="comparePaneHeaderMain">
-                    <h3>{hasRepositoryChoices ? 'Repository File' : 'Matched Source'}</h3>
+                    <h3>
+                      {selectedRightSourceOption?.optionType === 'repository'
+                        ? 'Repository File'
+                        : 'Matched Source'}
+                    </h3>
                     <p className="teacherSectionMeta">
-                      {hasRepositoryChoices ? selectedRepositoryName : comparison?.sourceLabel || selectedRepositoryName}
+                      {selectedRightSourceName}
                       {rightFileLabel ? ` - ${rightFileLabel}` : ''}
                     </p>
                   </div>
                   <div className="comparePaneHeaderTools comparePaneHeaderToolsRight">
-                    {hasRepositoryChoices && (
-                      <label className="compareInlineField" htmlFor="compare-right-repository">
-                        <span>Repository</span>
+                    {hasRightSourceChoices && (
+                      <label className="compareInlineField" htmlFor="compare-right-source">
+                        <span>Source</span>
                         <select
-                          id="compare-right-repository"
+                          id="compare-right-source"
                           className="teacherSelect compareSelect compareSelectCompact"
-                          value={effectiveRightRepositoryId}
+                          value={effectiveRightSourceId}
                           onChange={(event) => {
-                            setSelectedRightRepositoryId(event.target.value)
+                            setSelectedRightSourceId(event.target.value)
                             setSelectedRightFileId('')
                             setActiveBlockIndex(0)
                           }}
-                          disabled={!comparison?.repositoryOptions?.length}
+                          disabled={!rightSourceOptions.length}
                         >
-                          {(comparison?.repositoryOptions || []).map((option) => (
-                            <option key={option.repositoryId} value={option.repositoryId}>
-                              {option.repositoryName}
-                            </option>
-                          ))}
+                          {submissionSourceOptions.length > 0 && (
+                            <optgroup label="Student submissions">
+                              {submissionSourceOptions.map((option) => (
+                                <option key={option.sourceId} value={option.sourceId}>
+                                  {option.isMatchedSource
+                                    ? `${option.sourceName} - stored match`
+                                    : option.sourceName}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {repositoryOptions.length > 0 && (
+                            <optgroup label="Course repositories">
+                              {repositoryOptions.map((option) => (
+                                <option
+                                  key={`repository:${option.repositoryId}`}
+                                  value={`repository:${option.repositoryId}`}
+                                >
+                                  {option.repositoryName}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
                         </select>
                       </label>
                     )}
@@ -732,7 +905,7 @@ export default function SubmissionComparePage() {
                           setSelectedRightFileId(event.target.value)
                           setActiveBlockIndex(0)
                         }}
-                        disabled={isRepositorySourceLoading || !rightFiles.length}
+                        disabled={isRightSourceLoading || !rightFiles.length}
                       >
                         {rightFiles.length ? (
                           rightFiles.map((file) => (
@@ -742,7 +915,7 @@ export default function SubmissionComparePage() {
                           ))
                         ) : (
                           <option value="">
-                            {isRepositorySourceLoading
+                            {isRightSourceLoading
                               ? 'Loading files...'
                               : 'No readable files found'}
                           </option>
@@ -756,16 +929,16 @@ export default function SubmissionComparePage() {
                   </div>
                 </div>
 
-                {hasRepositoryChoices && repositorySourceError && (
-                  <div className="upload-feedback upload-feedback-error">{repositorySourceError}</div>
+                {rightSourceError && (
+                  <div className="upload-feedback upload-feedback-error">{rightSourceError}</div>
                 )}
 
                 {analysisState !== 'complete' ? (
                   <div>Source not available yet.</div>
-                ) : isRepositorySourceLoading ? (
-                  <div>Loading repository files...</div>
+                ) : isRightSourceLoading ? (
+                  <div>Loading source files...</div>
                 ) : !selectedRightFile ? (
-                  <div>Select a repository file to compare against.</div>
+                  <div>Select a source file to compare against.</div>
                 ) : (
                   <div
                     ref={rightPaneRef}
@@ -781,14 +954,7 @@ export default function SubmissionComparePage() {
                         <div
                           key={`right-${row.line.number}`}
                           className={`codeLine${row.blockIndex >= 0 ? ' matchColored' : ''}${row.blockIndex >= 0 && (row.blockIndex === hoveredBlockIndex || row.blockIndex === effectiveActiveBlockIndex) ? ' matchEmphasis' : ''}${row.blockIndex >= MATCH_PALETTE.length ? ' matchDashed' : ''}`}
-                          style={
-                            row.blockIndex >= 0
-                              ? {
-                                  backgroundColor:
-                                    MATCH_PALETTE[row.blockIndex % MATCH_PALETTE.length],
-                                }
-                              : undefined
-                          }
+                          style={getMatchLineStyle(row.blockIndex)}
                           data-line-number={row.line.number}
                           onMouseEnter={
                             row.blockIndex >= 0
