@@ -370,6 +370,23 @@ function buildSourceLabel(submissionRow, submissionId, userInfo = null) {
   return studentName ? `${studentName} (Submission #${submissionId})` : `Submission #${submissionId}`
 }
 
+function buildSubmissionSourceOption(submissionRow, userInfo = null, options = {}) {
+  const submissionId = String(submissionRow?.submission_id || '').trim()
+
+  if (!submissionId) {
+    return null
+  }
+
+  return {
+    sourceId: `submission:${submissionId}`,
+    sourceType: 'submission',
+    submissionId,
+    sourceName: buildSourceLabel(submissionRow, submissionId, userInfo),
+    sourcePublicId: getSubmissionPublicId(submissionRow),
+    isMatchedSource: Boolean(options.isMatchedSource),
+  }
+}
+
 function buildRangeCsv(sections) {
   if (!sections.length) return ''
 
@@ -1177,6 +1194,20 @@ async function loadSubmissionsByIds(submissionIds) {
   return new Map((data || []).map((row) => [String(row.submission_id), row]))
 }
 
+async function loadSubmissionsByRepositoryIds(repositoryIds) {
+  if (!repositoryIds.length) return new Map()
+
+  const { data, error } = await supabase
+    .from('submissions')
+    .select('submission_id, public_id, student_first_name_enc, student_last_name_enc, student_email_enc, created_at, repository_id, folder_path')
+    .in('repository_id', repositoryIds)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+
+  return new Map((data || []).map((row) => [String(row.submission_id), row]))
+}
+
 async function loadResultsBySubmissionIds(submissionIds) {
   if (!submissionIds.length) return new Map()
 
@@ -1898,11 +1929,11 @@ export async function fetchSubmissionComparison(submissionId, options = {}) {
     const repositoriesMap = await loadRepositoriesByIds([submission.repository_id])
     const repository = repositoriesMap.get(String(submission.repository_id))
     const assignmentRunId = repository?.assignment_run_id || null
-    const repositoryOptionRows = Array.from(
-      (
-        await loadAllRepositoriesByAssignmentRunIds(assignmentRunId ? [assignmentRunId] : [])
-      ).values()
+    const allRepositoryRows = Array.from(
+      (await loadAllRepositoriesByAssignmentRunIds(assignmentRunId ? [assignmentRunId] : []))
+        .values()
     )
+    const repositoryOptionRows = allRepositoryRows
       .filter((row) => hasRepositoryContent(row))
       .sort((left, right) => {
         if (Boolean(left.is_default) !== Boolean(right.is_default)) {
@@ -1934,8 +1965,11 @@ export async function fetchSubmissionComparison(submissionId, options = {}) {
         studentName: currentStudentName,
         assignmentRunId,
         repositoryOptions,
+        submissionSourceOptions: [],
+        defaultSourceOptionId: '',
         defaultRepositoryId: String(defaultRepositoryOption?.repository_id || ''),
         pairId: null,
+        sourceSubmissionId: '',
         sourceLabel: 'No stored comparison match',
         sourcePublicId: '',
         similarityScore: null,
@@ -1956,12 +1990,45 @@ export async function fetchSubmissionComparison(submissionId, options = {}) {
     ])
 
     const sourceSubmission = sourceSubmissionMap.get(String(sourceSubmissionId))
-    const userInfoMap = await loadUserInfoBySubmissionRows([sourceSubmission].filter(Boolean))
+    const comparisonSubmissionRows = Array.from(
+      (
+        await loadSubmissionsByRepositoryIds(
+          unique(allRepositoryRows.map((row) => row.repository_id))
+        )
+      ).values()
+    )
+    const studentSourceRows = getStudentSubmissions(comparisonSubmissionRows).filter(
+      (row) => String(row.submission_id) !== String(submission.submission_id)
+    )
+    const sourceOptionRowsById = new Map(
+      studentSourceRows.map((row) => [String(row.submission_id), row])
+    )
+
+    if (sourceSubmission && String(sourceSubmissionId) !== String(submission.submission_id)) {
+      sourceOptionRowsById.set(String(sourceSubmissionId), sourceSubmission)
+    }
+
+    const sourceOptionRows = Array.from(sourceOptionRowsById.values())
+    const userInfoMap = await loadUserInfoBySubmissionRows(sourceOptionRows)
     const sourceLabel = buildSourceLabel(
       sourceSubmission,
       sourceSubmissionId,
       userInfoMap.get(String(sourceSubmissionId))
     )
+    const submissionSourceOptions = sourceOptionRows
+      .map((row) =>
+        buildSubmissionSourceOption(row, userInfoMap.get(String(row.submission_id)), {
+          isMatchedSource: String(row.submission_id) === String(sourceSubmissionId),
+        })
+      )
+      .filter(Boolean)
+      .sort((left, right) => {
+        if (left.isMatchedSource !== right.isMatchedSource) {
+          return left.isMatchedSource ? -1 : 1
+        }
+
+        return left.sourceName.localeCompare(right.sourceName)
+      })
     const sections = orientSectionsForSubmission(rawSections, bestResult, submissionId)
 
     const [leftText, rightText] = await Promise.all([
@@ -1986,8 +2053,11 @@ export async function fetchSubmissionComparison(submissionId, options = {}) {
       studentName: currentStudentName,
       assignmentRunId,
       repositoryOptions,
+      submissionSourceOptions,
+      defaultSourceOptionId: sourceSubmissionId ? `submission:${sourceSubmissionId}` : '',
       defaultRepositoryId: String(defaultRepositoryOption?.repository_id || ''),
       pairId: bestResult.pair_id,
+      sourceSubmissionId: String(sourceSubmissionId || ''),
       sourceLabel,
       sourcePublicId: getSubmissionPublicId(sourceSubmission),
       similarityScore: Number(bestResult.score || 0),
@@ -2050,6 +2120,41 @@ function sanitizeRepositorySourceFiles(files = []) {
       index,
     }))
 }
+
+export async function fetchSubmissionComparisonSource(submissionId) {
+  try {
+    ensureSupabase()
+
+    const submissionMap = await loadSubmissionsByIds([submissionId])
+    const submission = submissionMap.get(String(submissionId))
+
+    if (!submission) {
+      throw new Error('Submission source not found.')
+    }
+
+    const userInfoMap = await loadUserInfoBySubmissionRows([submission])
+    const sourceName = buildSourceLabel(
+      submission,
+      submission.submission_id,
+      userInfoMap.get(String(submission.submission_id))
+    )
+    const rawText = await readStorageText(submission.folder_path)
+
+    return {
+      sourceId: `submission:${submission.submission_id}`,
+      sourceType: 'submission',
+      submissionId: String(submission.submission_id),
+      sourceName,
+      sourcePublicId: getSubmissionPublicId(submission),
+      rawText,
+      files: sanitizeRepositorySourceFiles(parseStructuredSourceFiles(rawText, sourceName)),
+    }
+  } catch (error) {
+    console.error('Failed to load submission source for comparison.', error)
+    throw buildDataAccessError(error, 'Failed to load submission source for comparison.')
+  }
+}
+
 export async function fetchRepositoryComparisonSource(repositoryId) {
   try {
     ensureSupabase()
