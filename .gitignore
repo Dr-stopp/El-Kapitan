@@ -170,4 +170,6 @@ Temporary Items
 ##Intellij
 backend/target/
 backend/.idea/
+
+# Other
 CLAUDE.md
